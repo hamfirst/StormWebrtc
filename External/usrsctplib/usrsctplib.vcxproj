@@ -1,0 +1,201 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="netinet6\sctp6_usrreq.c" />
+    <ClCompile Include="netinet\sctputil.c" />
+    <ClCompile Include="netinet\sctp_asconf.c" />
+    <ClCompile Include="netinet\sctp_auth.c" />
+    <ClCompile Include="netinet\sctp_bsd_addr.c" />
+    <ClCompile Include="netinet\sctp_callout.c" />
+    <ClCompile Include="netinet\sctp_cc_functions.c" />
+    <ClCompile Include="netinet\sctp_crc32.c" />
+    <ClCompile Include="netinet\sctp_indata.c" />
+    <ClCompile Include="netinet\sctp_input.c" />
+    <ClCompile Include="netinet\sctp_output.c" />
+    <ClCompile Include="netinet\sctp_pcb.c" />
+    <ClCompile Include="netinet\sctp_peeloff.c" />
+    <ClCompile Include="netinet\sctp_sha1.c" />
+    <ClCompile Include="netinet\sctp_ss_functions.c" />
+    <ClCompile Include="netinet\sctp_sysctl.c" />
+    <ClCompile Include="netinet\sctp_timer.c" />
+    <ClCompile Include="netinet\sctp_userspace.c" />
+    <ClCompile Include="netinet\sctp_usrreq.c" />
+    <ClCompile Include="user_environment.c" />
+    <ClCompile Include="user_mbuf.c" />
+    <ClCompile Include="user_recv_thread.c" />
+    <ClCompile Include="user_socket.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="netinet6\sctp6_var.h" />
+    <ClInclude Include="netinet\sctp.h" />
+    <ClInclude Include="netinet\sctputil.h" />
+    <ClInclude Include="netinet\sctp_asconf.h" />
+    <ClInclude Include="netinet\sctp_auth.h" />
+    <ClInclude Include="netinet\sctp_bsd_addr.h" />
+    <ClInclude Include="netinet\sctp_callout.h" />
+    <ClInclude Include="netinet\sctp_constants.h" />
+    <ClInclude Include="netinet\sctp_crc32.h" />
+    <ClInclude Include="netinet\sctp_header.h" />
+    <ClInclude Include="netinet\sctp_indata.h" />
+    <ClInclude Include="netinet\sctp_input.h" />
+    <ClInclude Include="netinet\sctp_lock_userspace.h" />
+    <ClInclude Include="netinet\sctp_os.h" />
+    <ClInclude Include="netinet\sctp_os_userspace.h" />
+    <ClInclude Include="netinet\sctp_output.h" />
+    <ClInclude Include="netinet\sctp_pcb.h" />
+    <ClInclude Include="netinet\sctp_peeloff.h" />
+    <ClInclude Include="netinet\sctp_process_lock.h" />
+    <ClInclude Include="netinet\sctp_sha1.h" />
+    <ClInclude Include="netinet\sctp_structs.h" />
+    <ClInclude Include="netinet\sctp_sysctl.h" />
+    <ClInclude Include="netinet\sctp_timer.h" />
+    <ClInclude Include="netinet\sctp_uio.h" />
+    <ClInclude Include="netinet\sctp_var.h" />
+    <ClInclude Include="user_atomic.h" />
+    <ClInclude Include="user_environment.h" />
+    <ClInclude Include="user_inpcb.h" />
+    <ClInclude Include="user_ip6_var.h" />
+    <ClInclude Include="user_ip_icmp.h" />
+    <ClInclude Include="user_malloc.h" />
+    <ClInclude Include="user_mbuf.h" />
+    <ClInclude Include="user_queue.h" />
+    <ClInclude Include="user_recv_thread.h" />
+    <ClInclude Include="user_route.h" />
+    <ClInclude Include="user_socketvar.h" />
+    <ClInclude Include="user_uma.h" />
+    <ClInclude Include="usrsctp.h" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B777A9B2-9A0A-48A3-92D7-240FF2D8ADA4}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>usrsctplib</RootNamespace>
+    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions);__Userspace_os_Windows;__Userspace__;SCTP_DEBUG;SCTP_SIMPLE_ALLOCATOR;SCTP_PROCESS_LEVEL_LOCKS;INET;INET6;_LIB</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;_LIB;%(PreprocessorDefinitions);__Userspace_os_Windows;__Userspace__;SCTP_DEBUG;SCTP_SIMPLE_ALLOCATOR;SCTP_PROCESS_LEVEL_LOCKS;INET;INET6;_LIB</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions);__Userspace_os_Windows;__Userspace__;SCTP_DEBUG;SCTP_SIMPLE_ALLOCATOR;SCTP_PROCESS_LEVEL_LOCKS;INET;INET6;_LIB</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions);__Userspace_os_Windows;__Userspace__;SCTP_DEBUG;SCTP_SIMPLE_ALLOCATOR;SCTP_PROCESS_LEVEL_LOCKS;INET;INET6;_LIB</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

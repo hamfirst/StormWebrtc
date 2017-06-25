@@ -1,0 +1,164 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="user_environment.c" />
+    <ClCompile Include="user_mbuf.c" />
+    <ClCompile Include="user_recv_thread.c" />
+    <ClCompile Include="user_socket.c" />
+    <ClCompile Include="netinet\sctp_asconf.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_auth.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_bsd_addr.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_callout.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_cc_functions.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_crc32.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_indata.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_input.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_output.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_pcb.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_peeloff.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_sha1.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_ss_functions.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_sysctl.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_timer.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_userspace.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctp_usrreq.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet\sctputil.c">
+      <Filter>netinet</Filter>
+    </ClCompile>
+    <ClCompile Include="netinet6\sctp6_usrreq.c">
+      <Filter>netinet6</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="netinet">
+      <UniqueIdentifier>{6f1f21f9-556e-47ac-babe-a36b375ea1fc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="netinet6">
+      <UniqueIdentifier>{74dae0b3-1f31-4fde-9716-df4badae2de7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="user_atomic.h" />
+    <ClInclude Include="user_environment.h" />
+    <ClInclude Include="user_inpcb.h" />
+    <ClInclude Include="user_ip_icmp.h" />
+    <ClInclude Include="user_ip6_var.h" />
+    <ClInclude Include="user_malloc.h" />
+    <ClInclude Include="user_mbuf.h" />
+    <ClInclude Include="user_queue.h" />
+    <ClInclude Include="user_recv_thread.h" />
+    <ClInclude Include="user_route.h" />
+    <ClInclude Include="user_socketvar.h" />
+    <ClInclude Include="user_uma.h" />
+    <ClInclude Include="usrsctp.h" />
+    <ClInclude Include="netinet\sctp.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_asconf.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_auth.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_bsd_addr.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_callout.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_constants.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_crc32.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_header.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_indata.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_input.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_lock_userspace.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_os.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_os_userspace.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_output.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_pcb.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_peeloff.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_process_lock.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_sha1.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_structs.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_sysctl.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_timer.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_uio.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctp_var.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet\sctputil.h">
+      <Filter>netinet</Filter>
+    </ClInclude>
+    <ClInclude Include="netinet6\sctp6_var.h">
+      <Filter>netinet6</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
