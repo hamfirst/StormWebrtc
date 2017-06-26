@@ -32,7 +32,7 @@
 
 #ifdef __FreeBSD__
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD: head/sys/netinet/sctp_bsd_addr.c 310590 2016-12-26 11:06:41Z tuexen $");
+__FBSDID("$FreeBSD: head/sys/netinet/sctp_bsd_addr.c 276914 2015-01-10 20:49:57Z tuexen $");
 #endif
 
 #include <netinet/sctp_os.h>
@@ -199,7 +199,11 @@ sctp_startup_iterator(void)
 #elif defined(__APPLE__)
 	kernel_thread_start((thread_continue_t)sctp_iterator_thread, NULL, &sctp_it_ctl.thread_proc);
 #elif defined(__Userspace__)
-	if (sctp_userspace_thread_create(&sctp_it_ctl.thread_proc, &sctp_iterator_thread)) {
+#if defined(__Userspace_os_Windows)
+	if ((sctp_it_ctl.thread_proc = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&sctp_iterator_thread, NULL, 0, NULL)) == NULL) {
+#else
+	if (pthread_create(&sctp_it_ctl.thread_proc, NULL, &sctp_iterator_thread, NULL)) {
+#endif
 		SCTP_PRINTF("ERROR: Creating sctp_iterator_thread failed.\n");
 	}
 #endif
@@ -318,6 +322,7 @@ static void
 sctp_init_ifns_for_vrf(int vrfid)
 {
 #if defined(INET) || defined(INET6)
+	struct ifaddrs *ifa;
 	struct sctp_ifa *sctp_ifa;
 	DWORD Err, AdapterAddrsSize;
 	PIP_ADAPTER_ADDRESSES pAdapterAddrs, pAdapt;
@@ -343,7 +348,6 @@ sctp_init_ifns_for_vrf(int vrfid)
 	/* Get actual adapter information */
 	if ((Err = GetAdaptersAddresses(AF_INET, 0, NULL, pAdapterAddrs, &AdapterAddrsSize)) != ERROR_SUCCESS) {
 		SCTP_PRINTF("GetAdaptersV4Addresses() failed with error code %d\n", Err);
-		FREE(pAdapterAddrs);
 		return;
 	}
 	/* Enumerate through each returned adapter and save its information */
@@ -353,14 +357,20 @@ sctp_init_ifns_for_vrf(int vrfid)
 				if (IN4_ISLINKLOCAL_ADDRESS(&(((struct sockaddr_in *)(pUnicast->Address.lpSockaddr))->sin_addr))) {
 					continue;
 				}
+				ifa = (struct ifaddrs*)malloc(sizeof(struct ifaddrs));
+				ifa->ifa_name = _strdup(pAdapt->AdapterName);
+				ifa->ifa_flags = pAdapt->Flags;
+				ifa->ifa_addr = (struct sockaddr *)malloc(sizeof(struct sockaddr_in));
+				memcpy(ifa->ifa_addr, pUnicast->Address.lpSockaddr, sizeof(struct sockaddr_in));
+
 				sctp_ifa = sctp_add_addr_to_vrf(0,
-				                                NULL,
+				                                ifa,
 				                                pAdapt->IfIndex,
 				                                (pAdapt->IfType == IF_TYPE_IEEE80211)?MIB_IF_TYPE_ETHERNET:pAdapt->IfType,
-				                                pAdapt->AdapterName,
-				                                NULL,
-				                                pUnicast->Address.lpSockaddr,
-				                                pAdapt->Flags,
+				                                ifa->ifa_name,
+				                                (void *)ifa,
+				                                ifa->ifa_addr,
+				                                ifa->ifa_flags,
 				                                0);
 				if (sctp_ifa) {
 					sctp_ifa->localifa_flags &= ~SCTP_ADDR_DEFER_USE;
@@ -368,7 +378,8 @@ sctp_init_ifns_for_vrf(int vrfid)
 			}
 		}
 	}
-	FREE(pAdapterAddrs);
+	if (pAdapterAddrs)
+		FREE(pAdapterAddrs);
 #endif
 #ifdef INET6
 	AdapterAddrsSize = 0;
@@ -388,21 +399,25 @@ sctp_init_ifns_for_vrf(int vrfid)
 	/* Get actual adapter information */
 	if ((Err = GetAdaptersAddresses(AF_INET6, 0, NULL, pAdapterAddrs, &AdapterAddrsSize)) != ERROR_SUCCESS) {
 		SCTP_PRINTF("GetAdaptersV6Addresses() failed with error code %d\n", Err);
-		FREE(pAdapterAddrs);
 		return;
 	}
 	/* Enumerate through each returned adapter and save its information */
 	for (pAdapt = pAdapterAddrs; pAdapt; pAdapt = pAdapt->Next) {
 		if (pAdapt->IfType == IF_TYPE_IEEE80211 || pAdapt->IfType == IF_TYPE_ETHERNET_CSMACD) {
 			for (pUnicast = pAdapt->FirstUnicastAddress; pUnicast; pUnicast = pUnicast->Next) {
+				ifa = (struct ifaddrs*)malloc(sizeof(struct ifaddrs));
+				ifa->ifa_name = _strdup(pAdapt->AdapterName);
+				ifa->ifa_flags = pAdapt->Flags;
+				ifa->ifa_addr = (struct sockaddr *)malloc(sizeof(struct sockaddr_in6));
+				memcpy(ifa->ifa_addr, pUnicast->Address.lpSockaddr, sizeof(struct sockaddr_in6));
 				sctp_ifa = sctp_add_addr_to_vrf(0,
-				                                NULL,
+				                                ifa,
 				                                pAdapt->Ipv6IfIndex,
 				                                (pAdapt->IfType == IF_TYPE_IEEE80211)?MIB_IF_TYPE_ETHERNET:pAdapt->IfType,
-				                                pAdapt->AdapterName,
-				                                NULL,
-				                                pUnicast->Address.lpSockaddr,
-				                                pAdapt->Flags,
+				                                ifa->ifa_name,
+				                                (void *)ifa,
+				                                ifa->ifa_addr,
+				                                ifa->ifa_flags,
 				                                0);
 				if (sctp_ifa) {
 					sctp_ifa->localifa_flags &= ~SCTP_ADDR_DEFER_USE;
@@ -410,7 +425,8 @@ sctp_init_ifns_for_vrf(int vrfid)
 			}
 		}
 	}
-	FREE(pAdapterAddrs);
+	if (pAdapterAddrs)
+		FREE(pAdapterAddrs);
 #endif
 }
 #elif defined(__Userspace__)
@@ -419,15 +435,15 @@ sctp_init_ifns_for_vrf(int vrfid)
 {
 #if defined(INET) || defined(INET6)
 	int rc;
-	struct ifaddrs *ifa, *ifas;
+	struct ifaddrs *ifa = NULL;
 	struct sctp_ifa *sctp_ifa;
 	uint32_t ifa_flags;
 
-	rc = getifaddrs(&ifas);
+	rc = getifaddrs(&g_interfaces);
 	if (rc != 0) {
 		return;
 	}
-	for (ifa = ifas; ifa; ifa = ifa->ifa_next) {
+	for (ifa = g_interfaces; ifa; ifa = ifa->ifa_next) {
 		if (ifa->ifa_addr == NULL) {
 			continue;
 		}
@@ -462,11 +478,11 @@ sctp_init_ifns_for_vrf(int vrfid)
 #endif
 		ifa_flags = 0;
 		sctp_ifa = sctp_add_addr_to_vrf(vrfid,
-		                                NULL,
+		                                ifa,
 		                                if_nametoindex(ifa->ifa_name),
 		                                0,
 		                                ifa->ifa_name,
-		                                NULL,
+		                                (void *)ifa,
 		                                ifa->ifa_addr,
 		                                ifa_flags,
 		                                0);
@@ -474,7 +490,6 @@ sctp_init_ifns_for_vrf(int vrfid)
 			sctp_ifa->localifa_flags &= ~SCTP_ADDR_DEFER_USE;
 		}
 	}
-	freeifaddrs(ifas);
 #endif
 }
 #endif
@@ -540,11 +555,11 @@ sctp_init_ifns_for_vrf(int vrfid)
 			}
 			snprintf(name, SCTP_IFNAMSIZ, "%s%d", ifnet_name(ifn), ifnet_unit(ifn));
 			sctp_ifa = sctp_add_addr_to_vrf(vrfid,
-			                                (void *)ifn, /* XXX */
+			                                (void *)ifn,
 			                                ifnet_index(ifn),
 			                                ifnet_type(ifn),
 			                                name,
-			                                (void *)ifa, /* XXX */
+			                                (void *)ifa,
 			                                ifa->ifa_addr,
 			                                ifa_flags,
 			                                0);
@@ -576,7 +591,7 @@ sctp_init_ifns_for_vrf(int vrfid)
 #endif
 
 	IFNET_RLOCK();
-	TAILQ_FOREACH(ifn, &MODULE_GLOBAL(ifnet), if_link) {
+	TAILQ_FOREACH(ifn, &MODULE_GLOBAL(ifnet), if_list) {
 		if (sctp_is_desired_interface_type(ifn) == 0) {
 			/* non desired type */
 			continue;
@@ -586,7 +601,7 @@ sctp_init_ifns_for_vrf(int vrfid)
 #else
 		IF_ADDR_LOCK(ifn);
 #endif
-		TAILQ_FOREACH(ifa, &ifn->if_addrhead, ifa_link) {
+		TAILQ_FOREACH(ifa, &ifn->if_addrlist, ifa_list) {
 			if (ifa->ifa_addr == NULL) {
 				continue;
 			}
@@ -671,14 +686,10 @@ sctp_addr_change(struct ifaddr *ifa, int cmd)
         return;
 #else
 	uint32_t ifa_flags = 0;
-
-	if (SCTP_BASE_VAR(sctp_pcb_initialized) == 0) {
-		return;
-	}
 	/* BSD only has one VRF, if this changes
 	 * we will need to hook in the right
 	 * things here to get the id to pass to
-	 * the address management routine.
+	 * the address managment routine.
 	 */
 	if (SCTP_BASE_VAR(first_time) == 0) {
 		/* Special test to see if my ::1 will showup with this */
@@ -753,11 +764,11 @@ sctp_add_or_del_interfaces(int (*pred)(struct ifnet *), int add)
 	struct ifaddr *ifa;
 
 	IFNET_RLOCK();
-	TAILQ_FOREACH(ifn, &MODULE_GLOBAL(ifnet), if_link) {
+	TAILQ_FOREACH(ifn, &MODULE_GLOBAL(ifnet), if_list) {
 		if (!(*pred)(ifn)) {
 			continue;
 		}
-		TAILQ_FOREACH(ifa, &ifn->if_addrhead, ifa_link) {
+		TAILQ_FOREACH(ifa, &ifn->if_addrlist, ifa_list) {
 			sctp_addr_change(ifa, add ? RTM_ADD : RTM_DELETE);
 		}
 	}

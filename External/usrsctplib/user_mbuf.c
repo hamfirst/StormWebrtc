@@ -121,7 +121,7 @@ m_get(int how, short type)
 	mbuf_mb_args.type = type;
 #endif
 	/* Mbuf master zone, zone_mbuf, has already been
-	 * created in mbuf_initialize() */
+	 * created in mbuf_init() */
 	mret = SCTP_ZONE_GET(zone_mbuf, struct mbuf);
 #if defined(SCTP_SIMPLE_ALLOCATOR)
 	mb_ctor_mbuf(mret, &mbuf_mb_args, 0);
@@ -327,8 +327,12 @@ m_tag_setup(struct m_tag *t, u_int32_t cookie, int type, int len)
 
 /************ End functions to substitute umem_cache_alloc and umem_cache_free **************/
 
+/* __Userspace__
+ * TODO: mbuf_init must be called in the initialization routines
+ * of userspace stack.
+ */
 void
-mbuf_initialize(void *dummy)
+mbuf_init(void *dummy)
 {
 
 	/*
@@ -728,7 +732,7 @@ m_pullup(struct mbuf *n, int len)
 		if (n->m_flags & M_PKTHDR)
 			M_MOVE_PKTHDR(m, n);
 	}
-	space = (int)(&m->m_dat[MLEN] - (m->m_data + m->m_len));
+	space = &m->m_dat[MLEN] - (m->m_data + m->m_len);
 	do {
 		count = min(min(max(len, max_protohdr), space), n->m_len);
 		bcopy(mtod(n, caddr_t), mtod(m, caddr_t) + m->m_len,
@@ -1076,8 +1080,6 @@ int
 m_dup_pkthdr(struct mbuf *to, struct mbuf *from, int how)
 {
 
-	KASSERT(to, ("m_dup_pkthdr: to is NULL"));
-	KASSERT(from, ("m_dup_pkthdr: from is NULL"));
 	to->m_flags = (from->m_flags & M_COPYFLAGS) | (to->m_flags & M_EXT);
 	if ((to->m_flags & M_EXT) == 0)
 		to->m_data = to->m_pktdat;

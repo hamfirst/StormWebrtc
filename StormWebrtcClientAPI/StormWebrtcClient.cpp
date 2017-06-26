@@ -122,7 +122,8 @@ void StormWebrtcClient::StartConnect(const char * ipaddr, int port, const char *
   }
 
   s_StormWebrtcs[m_Socket] = this;
-  EM_ASM_ARGS({ StormWebrtcCreateConnection($0, $1, $2, $3, $4, $5, $6, $7); }, m_Socket, ipaddr, port, m_InChannels.data(), m_InChannels.size(), m_OutChannels.data(), m_OutChannels.size());
+  EM_ASM_ARGS({ StormWebrtcCreateConnection($0, $1, $2, $3, $4, $5, $6, $7); }, 
+    m_Socket, ipaddr, fingerprint, port, m_InChannels.data(), m_InChannels.size(), m_OutChannels.data(), m_OutChannels.size());
   m_Connecting = true;
 }
 
@@ -171,7 +172,7 @@ void StormWebrtcClient::SendPacket(int stream, const void * data, std::size_t da
 
 bool StormWebrtcClient::PollPacket(StormWebrtcPacket & out_packet)
 {
-  if (m_PendingPackets.size())
+  if (m_PendingPackets.size() == 0)
   {
     return false;
   }

@@ -78,7 +78,7 @@ typedef HANDLE userland_thread_t;
 #define IPVERSION  4
 #define MAXTTL     255
 /* VS2010 comes with stdint.h */
-#if _MSC_VER >= 1600
+#if !defined(_MSC_VER) || _MSC_VER >= 1600
 #include <stdint.h>
 #else
 #define uint64_t   unsigned __int64
@@ -104,6 +104,45 @@ typedef HANDLE userland_thread_t;
 #define sa_family_t unsigned __int8
 #define ssize_t    __int64
 #define __func__	__FUNCTION__
+
+#ifdef SCTP_USE_WINSOCK_CODES
+#undef EWOULDBLOCK
+#undef EINPROGRESS
+#undef EALREADY
+#undef ENOTSOCK
+#undef EDESTADDRREQ
+#undef EMSGSIZE
+#undef EPROTOTYPE
+#undef ENOPROTOOPT
+#undef EPROTONOSUPPORT
+#undef ESOCKTNOSUPPORT
+#undef EOPNOTSUPP
+#undef ENOTSUP
+#undef EPFNOSUPPORT
+#undef EAFNOSUPPORT
+#undef EADDRINUSE
+#undef EADDRNOTAVAIL
+#undef ENETDOWN
+#undef ENETUNREACH
+#undef ENETRESET
+#undef ECONNABORTED
+#undef ECONNRESET
+#undef ENOBUFS
+#undef EISCONN
+#undef ENOTCONN
+#undef ESHUTDOWN
+#undef ETOOMANYREFS
+#undef ETIMEDOUT
+#undef ECONNREFUSED
+#undef ELOOP
+#undef EHOSTDOWN
+#undef EHOSTUNREACH
+#undef EPROCLIM
+#undef EUSERS
+#undef EDQUOT
+#undef ESTALE
+#undef EREMOTE
+#endif
 
 #ifndef EWOULDBLOCK
 #define EWOULDBLOCK             WSAEWOULDBLOCK
@@ -218,11 +257,13 @@ typedef char* caddr_t;
 
 #define bzero(buf, len) memset(buf, 0, len)
 #define bcopy(srcKey, dstKey, len) memcpy(dstKey, srcKey, len)
+#ifdef _MSC_VER
 #if _MSC_VER < 1900
 #define snprintf(data, size, format, ...) _snprintf_s(data, size, _TRUNCATE, format, __VA_ARGS__)
 #endif
 #define inline __inline
 #define __inline__ __inline
+#endif
 #define	MSG_EOR		0x8		/* data completes record */
 #define	MSG_DONTWAIT	0x80		/* this message should be nonblocking */
 
@@ -324,7 +365,7 @@ struct ip {
 	u_char    ip_ttl;
 	u_char    ip_p;
 	u_short   ip_sum;
-	struct in_addr ip_src, ip_dst;
+    struct in_addr ip_src, ip_dst;
 };
 
 struct ifaddrs {
@@ -345,7 +386,7 @@ struct udphdr {
 };
 
 struct iovec {
-	size_t len;
+	unsigned long len;
 	char *buf;
 };
 
@@ -417,6 +458,11 @@ int Win_getifaddrs(struct ifaddrs**);
 #define getifaddrs(interfaces)  (int)Win_getifaddrs(interfaces)
 int win_if_nametoindex(const char *);
 #define if_nametoindex(x) win_if_nametoindex(x)
+
+#else /* !defined(Userspace_os_Windows) */
+#if defined(__ANDROID__)
+#define in_addr_t uint32_t
+#endif
 #endif
 
 #define mtx_lock(arg1)
@@ -762,6 +808,14 @@ MALLOC_DECLARE(SCTP_M_SOCKOPT);
 	umem_cache_destroy(zone);
 #endif
 
+/* global struct ifaddrs used in sctp_init_ifns_for_vrf getifaddrs call
+ *  but references to fields are needed to persist as the vrf is queried.
+ *  getifaddrs allocates memory that needs to be freed with a freeifaddrs
+ *  call; this global is used to call freeifaddrs upon in sctp_pcb_finish
+ */
+extern struct ifaddrs *g_interfaces;
+
+
 /*
  * __Userspace__ Defining sctp_hashinit_flags() and sctp_hashdestroy() for userland.
  */
@@ -1033,11 +1087,6 @@ struct sockaddr_conn {
 	uint16_t sconn_port;
 	void *sconn_addr;
 };
-
-typedef void *(*start_routine_t)(void *);
-
-extern int
-sctp_userspace_thread_create(userland_thread_t *thread, start_routine_t start_routine);
 
 void
 sctp_userspace_set_threadname(const char *name);

@@ -32,7 +32,7 @@
 
 #ifdef __FreeBSD__
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD: head/sys/netinet/sctp_auth.c 310590 2016-12-26 11:06:41Z tuexen $");
+__FBSDID("$FreeBSD: head/sys/netinet/sctp_auth.c 289570 2015-10-19 11:17:54Z tuexen $");
 #endif
 
 #include <netinet/sctp_os.h>
@@ -544,7 +544,7 @@ sctp_insert_sharedkey(struct sctp_keyhead *shared_keys,
 		}
 	}
 	/* shouldn't reach here */
-	return (EINVAL);
+	return (0);
 }
 
 void
@@ -624,11 +624,8 @@ sctp_copy_skeylist(const struct sctp_keyhead *src, struct sctp_keyhead *dest)
 	LIST_FOREACH(skey, src, next) {
 		new_skey = sctp_copy_sharedkey(skey);
 		if (new_skey != NULL) {
-			if (sctp_insert_sharedkey(dest, new_skey)) {
-				sctp_free_sharedkey(new_skey);
-			} else {
-				count++;
-			}
+			(void)sctp_insert_sharedkey(dest, new_skey);
+			count++;
 		}
 	}
 	return (count);

@@ -142,7 +142,7 @@ sctp_os_timer_stop(sctp_os_timer_t *c)
 	return (1);
 }
 
-static void
+void
 sctp_handle_tick(int delta)
 {
 	sctp_os_timer_t *c;
@@ -213,12 +213,18 @@ sctp_start_timer(void)
 	 * No need to do SCTP_TIMERQ_LOCK_INIT();
 	 * here, it is being done in sctp_pcb_init()
 	 */
+#if defined (__Userspace_os_Windows)
+	if ((SCTP_BASE_VAR(timer_thread) = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)user_sctp_timer_iterate, NULL, 0, NULL)) == NULL) {
+		SCTP_PRINTF("ERROR; Creating ithread failed\n");
+	}
+#else
 	int rc;
 
-	rc = sctp_userspace_thread_create(&SCTP_BASE_VAR(timer_thread), user_sctp_timer_iterate);
+	rc = pthread_create(&SCTP_BASE_VAR(timer_thread), NULL, user_sctp_timer_iterate, NULL);
 	if (rc) {
-		SCTP_PRINTF("ERROR; return code from sctp_thread_create() is %d\n", rc);
+		SCTP_PRINTF("ERROR; return code from pthread_create() is %d\n", rc);
 	}
+#endif
 }
 
 #endif

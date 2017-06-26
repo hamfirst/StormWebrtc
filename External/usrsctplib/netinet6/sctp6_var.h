@@ -32,7 +32,7 @@
 
 #ifdef __FreeBSD__
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD: head/sys/netinet6/sctp6_var.h 309607 2016-12-06 10:21:25Z tuexen $");
+__FBSDID("$FreeBSD: head/sys/netinet6/sctp6_var.h 243186 2012-11-17 20:04:04Z tuexen $");
 #endif
 
 #ifndef _NETINET6_SCTP6_VAR_H_
@@ -81,7 +81,8 @@ extern void in6_sin_2_v4mapsin6(struct sockaddr_in *, struct sockaddr_in6 *);
 extern void in6_sin6_2_sin(struct sockaddr_in *, struct sockaddr_in6 *);
 extern void in6_sin6_2_sin_in_sock(struct sockaddr *);
 #endif
-void sctp6_notify(struct sctp_inpcb *, struct sctp_tcb *, struct sctp_nets *,
-                  uint8_t, uint8_t, uint16_t);
+extern void sctp6_notify(struct sctp_inpcb *, struct icmp6_hdr *,
+                         struct sctphdr *, struct sockaddr *,
+                         struct sctp_tcb *, struct sctp_nets *);
 #endif
 #endif

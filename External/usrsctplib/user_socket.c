@@ -39,7 +39,7 @@
 #include <netinet/sctp_sysctl.h>
 #include <netinet/sctp_input.h>
 #include <netinet/sctp_peeloff.h>
-#include <netinet/sctp_crc32.h>
+#include <netinet/sctp_callout.h>
 #ifdef INET6
 #include <netinet6/sctp6_var.h>
 #endif
@@ -59,9 +59,11 @@
 #endif
 userland_mutex_t accept_mtx;
 userland_cond_t accept_cond;
-#ifdef _WIN32
+#ifdef _MSC_VER
 #include <time.h>
 #include <sys/timeb.h>
+#else
+#include <sys/time.h>
 #endif
 
 MALLOC_DEFINE(M_PCB, "sctp_pcb", "sctp pcb");
@@ -77,11 +79,7 @@ extern int sctp_sosend(struct socket *so, struct sockaddr *addr, struct uio *uio
 extern int sctp_attach(struct socket *so, int proto, uint32_t vrf_id);
 extern int sctpconn_attach(struct socket *so, int proto, uint32_t vrf_id);
 
-void
-usrsctp_init(uint16_t port,
-             int (*conn_output)(void *addr, void *buffer, size_t length, uint8_t tos, uint8_t set_df),
-             void (*debug_printf)(const char *format, ...))
-{
+static void init_sync() {
 #if defined(__Userspace_os_Windows)
 #if defined(INET) || defined(INET6)
 	WSADATA wsaData;
@@ -104,7 +102,25 @@ usrsctp_init(uint16_t port,
 	pthread_mutexattr_destroy(&mutex_attr);
 	pthread_cond_init(&accept_cond, NULL);
 #endif
-	sctp_init(port, conn_output, debug_printf);
+}
+
+void
+usrsctp_init(uint16_t port,
+             int (*conn_output)(void *addr, void *buffer, size_t length, uint8_t tos, uint8_t set_df),
+             void (*debug_printf)(const char *format, ...))
+{
+	init_sync();
+	sctp_init(port, conn_output, debug_printf, 1);
+}
+
+
+void
+usrsctp_init_nothreads(uint16_t port,
+		       int (*conn_output)(void *addr, void *buffer, size_t length, uint8_t tos, uint8_t set_df),
+		       void (*debug_printf)(const char *format, ...))
+{
+	init_sync();
+	sctp_init(port, conn_output, debug_printf, 0);
 }
 
 
@@ -582,13 +598,13 @@ struct sctp_generic_recvmsg_args {
    Source: /src/sys/gnu/fs/xfs/FreeBSD/xfs_ioctl.c
  */
 static __inline__ int
-copy_to_user(void *dst, void *src, size_t len) {
+copy_to_user(void *dst, void *src, int len) {
 	memcpy(dst, src, len);
 	return 0;
 }
 
 static __inline__ int
-copy_from_user(void *dst, void *src, size_t len) {
+copy_from_user(void *dst, void *src, int len) {
 	memcpy(dst, src, len);
 	return 0;
 }
@@ -632,7 +648,7 @@ int
 uiomove(void *cp, int n, struct uio *uio)
 {
 	struct iovec *iov;
-	size_t cnt;
+	int cnt;
 	int error = 0;
 
 	if ((uio->uio_rw != UIO_READ) &&
@@ -648,7 +664,7 @@ uiomove(void *cp, int n, struct uio *uio)
 			uio->uio_iovcnt--;
 			continue;
 		}
-		if (cnt > (size_t)n)
+		if (cnt > n)
 			cnt = n;
 
 		switch (uio->uio_segflg) {
@@ -672,9 +688,9 @@ uiomove(void *cp, int n, struct uio *uio)
 		iov->iov_base = (char *)iov->iov_base + cnt;
 		iov->iov_len -= cnt;
 		uio->uio_resid -= cnt;
-		uio->uio_offset += (off_t)cnt;
+		uio->uio_offset += cnt;
 		cp = (char *)cp + cnt;
-		n -= (int)cnt;
+		n -= cnt;
 	}
 out:
 	return (error);
@@ -706,52 +722,6 @@ getsockaddr(namp, uaddr, len)
 		*namp = sa;
 	}
 	return (error);
-}
-
-int
-usrsctp_getsockopt(struct socket *so, int level, int option_name,
-                   void *option_value, socklen_t *option_len);
-
-sctp_assoc_t
-usrsctp_getassocid(struct socket *sock, struct sockaddr *sa)
-{
-	struct sctp_paddrinfo sp;
-	socklen_t siz;
-#ifndef HAVE_SA_LEN
-	size_t sa_len;
-#endif
-
-	/* First get the assoc id */
-	siz = sizeof(sp);
-	memset(&sp, 0, sizeof(sp));
-#ifdef HAVE_SA_LEN
-	memcpy((caddr_t)&sp.spinfo_address, sa, sa->sa_len);
-#else
-	switch (sa->sa_family) {
-#ifdef INET
-	case AF_INET:
-		sa_len = sizeof(struct sockaddr_in);
-		break;
-#endif
-#ifdef INET6
-	case AF_INET6:
-		sa_len = sizeof(struct sockaddr_in6);
-		break;
-#endif
-	case AF_CONN:
-		sa_len = sizeof(struct sockaddr_conn);
-		break;
-	default:
-		sa_len = 0;
-		break;
-	}
-	memcpy((caddr_t)&sp.spinfo_address, sa, sa_len);
-#endif
-	if (usrsctp_getsockopt(sock, IPPROTO_SCTP, SCTP_GET_PEER_ADDR_INFO, &sp, &siz) != 0) {
-		/* We depend on the fact that 0 can never be returned */
-		return ((sctp_assoc_t) 0);
-	}
-	return (sp.spinfo_assoc_id);
 }
 
 
@@ -824,33 +794,44 @@ userspace_sctp_sendmsg(struct socket *so,
 }
 
 
+size_t
+iovec_len(const struct iovec* iov, int iovcnt)
+{
+	size_t size = 0;
+	int i;
+
+	for (i = 0; i < iovcnt; ++i) {
+		size += iov[i].iov_len;
+	}
+
+	return size;
+}
+
 ssize_t
-usrsctp_sendv(struct socket *so,
-              const void *data,
-              size_t len,
-              struct sockaddr *to,
-              int addrcnt,
-              void *info,
-              socklen_t infolen,
-              unsigned int infotype,
-              int flags)
+usrsctp_sendvec(struct socket *so,
+		const struct iovec *iov,
+		int iovcnt,
+		struct sockaddr *to,
+		int addrcnt,
+		void *info,
+		socklen_t infolen,
+		unsigned int infotype,
+		int flags)
 {
 	struct sctp_sndrcvinfo sinfo;
 	struct uio auio;
-	struct iovec iov[1];
 	int use_sinfo;
-	sctp_assoc_t *assoc_id;
+	int len;
 
 	if (so == NULL) {
 		errno = EBADF;
 		return (-1);
 	}
-	if (data == NULL) {
+	if (iov == NULL) {
 		errno = EFAULT;
 		return (-1);
 	}
 	memset(&sinfo, 0, sizeof(struct sctp_sndrcvinfo));
-	assoc_id = NULL;
 	use_sinfo = 0;
 	switch (infotype) {
 	case SCTP_SENDV_NOINFO:
@@ -869,7 +850,6 @@ usrsctp_sendv(struct socket *so,
 		sinfo.sinfo_ppid = ((struct sctp_sndinfo *)info)->snd_ppid;
 		sinfo.sinfo_context = ((struct sctp_sndinfo *)info)->snd_context;
 		sinfo.sinfo_assoc_id = ((struct sctp_sndinfo *)info)->snd_assoc_id;
-		assoc_id = &(((struct sctp_sndinfo *)info)->snd_assoc_id);
 		use_sinfo = 1;
 		break;
 	case SCTP_SENDV_PRINFO:
@@ -896,7 +876,6 @@ usrsctp_sendv(struct socket *so,
 			sinfo.sinfo_ppid = ((struct sctp_sendv_spa *)info)->sendv_sndinfo.snd_ppid;
 			sinfo.sinfo_context = ((struct sctp_sendv_spa *)info)->sendv_sndinfo.snd_context;
 			sinfo.sinfo_assoc_id = ((struct sctp_sendv_spa *)info)->sendv_sndinfo.snd_assoc_id;
-			assoc_id = &(((struct sctp_sendv_spa *)info)->sendv_sndinfo.snd_assoc_id);
 		} else {
 			sinfo.sinfo_flags = 0;
 			sinfo.sinfo_stream = 0;
@@ -922,26 +901,45 @@ usrsctp_sendv(struct socket *so,
 		return (-1);
 	}
 
-	iov[0].iov_base = (caddr_t)data;
-	iov[0].iov_len = len;
+	len = iovec_len(iov, iovcnt);
 
-	auio.uio_iov =  iov;
-	auio.uio_iovcnt = 1;
+	auio.uio_iov =  (struct iovec*)iov;
+	auio.uio_iovcnt = iovcnt;
 	auio.uio_segflg = UIO_USERSPACE;
 	auio.uio_rw = UIO_WRITE;
 	auio.uio_offset = 0;			/* XXX */
 	auio.uio_resid = len;
 	errno = sctp_lower_sosend(so, to, &auio, NULL, NULL, flags, use_sinfo ? &sinfo : NULL);
 	if (errno == 0) {
-		if ((to != NULL) && (assoc_id != NULL)) {
-			*assoc_id = usrsctp_getassocid(so, to);
-		}
 		return (len - auio.uio_resid);
 	} else {
 		return (-1);
 	}
 }
 
+ssize_t
+usrsctp_sendv(struct socket *so,
+	      const void *data,
+	      size_t len,
+	      struct sockaddr *to,
+	      int addrcnt,
+	      void *info,
+	      socklen_t infolen,
+	      unsigned int infotype,
+	      int flags)
+{
+	struct iovec iov;
+
+	if (data == NULL) {
+		errno = EFAULT;
+		return (-1);
+	}
+
+	iov.iov_base = (char*)data;
+	iov.iov_len = len;
+
+	return usrsctp_sendvec(so, &iov, 1, to, addrcnt, info, infolen, infotype, flags);
+}
 
 ssize_t
 userspace_sctp_sendmbuf(struct socket *so,
@@ -961,7 +959,7 @@ userspace_sctp_sendmbuf(struct socket *so,
           struct iovec iov[1]; */
     int error = 0;
     int uflags = 0;
-    ssize_t retval;
+    int retvalsendmsg;
 
     sinfo->sinfo_ppid = ppid;
     sinfo->sinfo_flags = flags;
@@ -991,16 +989,16 @@ userspace_sctp_sendmbuf(struct socket *so,
 sendmsg_return:
     /* TODO: Needs a condition for non-blocking when error is EWOULDBLOCK */
     if (0 == error)
-        retval = len;
+        retvalsendmsg = len;
     else if (error == EWOULDBLOCK) {
         errno = EWOULDBLOCK;
-        retval = -1;
+        retvalsendmsg = (-1);
     } else {
         SCTP_PRINTF("%s: error = %d\n", __func__, error);
         errno = error;
-        retval = -1;
+        retvalsendmsg = (-1);
     }
-    return (retval);
+    return retvalsendmsg;
 
 }
 
@@ -1026,8 +1024,7 @@ userspace_sctp_recvmsg(struct socket *so,
 	struct iovec *tiov;
 	int iovlen = 1;
 	int error = 0;
-	ssize_t ulen;
-	int i;
+	int ulen, i, retval;
 	socklen_t fromlen;
 
 	iov[0].iov_base = dbuf;
@@ -1058,7 +1055,7 @@ userspace_sctp_recvmsg(struct socket *so,
 		    (struct sctp_sndrcvinfo *)sinfo, 1);
 
 	if (error) {
-		if ((auio.uio_resid != ulen) &&
+		if (auio.uio_resid != (int)ulen &&
 		    (error == EINTR ||
 #if !defined(__Userspace_os_NetBSD)
 		     error == ERESTART ||
@@ -1090,9 +1087,10 @@ userspace_sctp_recvmsg(struct socket *so,
 			*fromlenp = fromlen;
 		}
 	}
-	if (error == 0) {
+	if (error == 0){
 		/* ready return value */
-		return (ulen - auio.uio_resid);
+		retval = (int)ulen - auio.uio_resid;
+		return (retval);
 	} else {
 		SCTP_PRINTF("%s: error = %d\n", __func__, error);
 		return (-1);
@@ -1114,8 +1112,7 @@ usrsctp_recvv(struct socket *so,
 	struct iovec iov[SCTP_SMALL_IOVEC_SIZE];
 	struct iovec *tiov;
 	int iovlen = 1;
-	ssize_t ulen;
-	int i;
+	int ulen, i;
 	socklen_t fromlen;
 	struct sctp_rcvinfo *rcv;
 	struct sctp_recvv_rn *rn;
@@ -1151,7 +1148,7 @@ usrsctp_recvv(struct socket *so,
 		    from, fromlen, msg_flags,
 		    (struct sctp_sndrcvinfo *)&seinfo, 1);
 	if (errno) {
-		if ((auio.uio_resid != ulen) &&
+		if (auio.uio_resid != (int)ulen &&
 		    (errno == EINTR ||
 #if !defined(__Userspace_os_NetBSD)
 		     errno == ERESTART ||
@@ -1236,7 +1233,7 @@ usrsctp_recvv(struct socket *so,
 	}
 	if (errno == 0) {
 		/* ready return value */
-		return (ulen - auio.uio_resid);
+		return ((int)ulen - auio.uio_resid);
 	} else {
 		return (-1);
 	}
@@ -1417,7 +1414,7 @@ usrsctp_socket(int domain, int type, int protocol,
 {
 	struct socket *so;
 
-	if ((protocol == IPPROTO_SCTP) && (SCTP_BASE_VAR(sctp_pcb_initialized) == 0)) {
+	if ((protocol = IPPROTO_SCTP) && (SCTP_BASE_VAR(sctp_pcb_initialized) == 0)) {
 		errno = EPROTONOSUPPORT;
 		return (NULL);
 	}
@@ -1563,8 +1560,9 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 #endif
 	}
 	SOCKBUF_UNLOCK(sb);
-	/*__Userspace__ what todo about so_upcall?*/
 
+	if ((sb->sb_flags & SB_UPCALL) && so->so_upcall != NULL)
+		(*so->so_upcall)(so, so->so_upcallarg, M_NOWAIT);
 }
 #else /* kernel version for reference */
 /*
@@ -1932,7 +1930,7 @@ accept1(struct socket *so, struct sockaddr *aname, socklen_t *anamelen, struct s
 struct socket *
 usrsctp_accept(struct socket *so, struct sockaddr *aname, socklen_t *anamelen)
 {
-	struct socket *accept_return_sock = NULL;
+	struct socket *accept_return_sock;
 
 	errno = accept1(so, aname, anamelen, &accept_return_sock);
 	if (errno) {
@@ -2024,6 +2022,46 @@ usrsctp_get_non_blocking(struct socket *so)
 	}
 	SOCK_UNLOCK(so);
 	return (result);
+}
+
+int
+usrsctp_get_events(struct socket *so)
+{
+	int events = 0;
+
+	if (so == NULL) {
+		errno = EBADF;
+		return -1;
+	}
+
+	if (soreadable(so)) {
+		events |= SCTP_EVENT_READ;
+	}
+	if (sowriteable(so)) {
+		events |= SCTP_EVENT_WRITE;
+	}
+	if (so->so_error) {
+		events |= SCTP_EVENT_ERROR;
+	}
+	return events;
+}
+
+int
+usrsctp_set_upcall(struct socket *so, void (*upcall)(struct socket *, void *, int), void *arg)
+{
+	if (so == NULL) {
+		errno = EBADF;
+		return (-1);
+	}
+
+	SOCK_LOCK(so);
+	so->so_upcall = upcall;
+	so->so_upcallarg = arg;
+	so->so_snd.sb_flags |= SB_UPCALL;
+	so->so_rcv.sb_flags |= SB_UPCALL;
+	SOCK_UNLOCK(so);
+
+	return (0);
 }
 
 int
@@ -2405,6 +2443,16 @@ usrsctp_getsockopt(struct socket *so, int level, int option_name,
 				*option_len = (socklen_t)sizeof(struct linger);
 				return (0);
 			}
+		case SO_ERROR:
+			if (*option_len < sizeof(int)) {
+				errno = EINVAL;
+				return (-1);
+			} else {
+				int *intval = (int *)option_value;
+				*intval = so->so_error;
+				*option_len = (socklen_t)sizeof(int);
+				return (0);
+			}
 		default:
 			errno = EINVAL;
 			return (-1);
@@ -2551,24 +2599,6 @@ usrsctp_bindx(struct socket *so, struct sockaddr *addrs, int addrcnt, int flags)
 		gaddrs->sget_assoc_id = 0;
 #ifdef HAVE_SA_LEN
 		memcpy(gaddrs->addr, sa, sa->sa_len);
-#if defined(INET) || defined(INET6)
-		if ((i == 0) && (sport != 0)) {
-			switch (gaddrs->addr->sa_family) {
-#ifdef INET
-			case AF_INET:
-				sin = (struct sockaddr_in *)gaddrs->addr;
-				sin->sin_port = sport;
-				break;
-#endif
-#ifdef INET6
-			case AF_INET6:
-				sin6 = (struct sockaddr_in6 *)gaddrs->addr;
-				sin6->sin6_port = sport;
-				break;
-#endif
-			}
-		}
-#endif
 		if (usrsctp_setsockopt(so, IPPROTO_SCTP, flags, gaddrs, (socklen_t)argsz) != 0) {
 			free(gaddrs);
 			return (-1);
@@ -2994,12 +3024,12 @@ sctp_userspace_ip_output(int *result, struct mbuf *o_pak,
 	msg_hdr.msg_controllen = 0;
 	msg_hdr.msg_flags = 0;
 
-	if ((!use_udp_tunneling) && (SCTP_BASE_VAR(userspace_rawsctp) != -1)) {
+	if ((!use_udp_tunneling) && (SCTP_BASE_VAR(userspace_rawsctp) > -1)) {
 		if ((res = sendmsg(SCTP_BASE_VAR(userspace_rawsctp), &msg_hdr, MSG_DONTWAIT)) != send_len) {
 			*result = errno;
 		}
 	}
-	if ((use_udp_tunneling) && (SCTP_BASE_VAR(userspace_udpsctp) != -1)) {
+	if ((use_udp_tunneling) && (SCTP_BASE_VAR(userspace_udpsctp) > -1)) {
 		if ((res = sendmsg(SCTP_BASE_VAR(userspace_udpsctp), &msg_hdr, MSG_DONTWAIT)) != send_len) {
 			*result = errno;
 		}
@@ -3014,14 +3044,14 @@ sctp_userspace_ip_output(int *result, struct mbuf *o_pak,
 	win_msg_hdr.Control = winbuf;
 	win_msg_hdr.dwFlags = 0;
 
-	if ((!use_udp_tunneling) && (SCTP_BASE_VAR(userspace_rawsctp) != -1)) {
+	if ((!use_udp_tunneling) && (SCTP_BASE_VAR(userspace_rawsctp) > -1)) {
 		if (WSASendTo(SCTP_BASE_VAR(userspace_rawsctp), (LPWSABUF) send_iovec, iovcnt, &win_sent_len, win_msg_hdr.dwFlags, win_msg_hdr.name, (int) win_msg_hdr.namelen, NULL, NULL) != 0) {
 			*result = WSAGetLastError();
 		} else if (win_sent_len != send_len) {
 			*result = WSAGetLastError();
 		}
 	}
-	if ((use_udp_tunneling) && (SCTP_BASE_VAR(userspace_udpsctp) != -1)) {
+	if ((use_udp_tunneling) && (SCTP_BASE_VAR(userspace_udpsctp) > -1)) {
 		if (WSASendTo(SCTP_BASE_VAR(userspace_udpsctp), (LPWSABUF) send_iovec, iovcnt, &win_sent_len, win_msg_hdr.dwFlags, win_msg_hdr.name, (int) win_msg_hdr.namelen, NULL, NULL) != 0) {
 			*result = WSAGetLastError();
 		} else if (win_sent_len != send_len) {
@@ -3152,12 +3182,12 @@ void sctp_userspace_ip6_output(int *result, struct mbuf *o_pak,
 	msg_hdr.msg_controllen = 0;
 	msg_hdr.msg_flags = 0;
 
-	if ((!use_udp_tunneling) && (SCTP_BASE_VAR(userspace_rawsctp6) != -1)) {
+	if ((!use_udp_tunneling) && (SCTP_BASE_VAR(userspace_rawsctp6) > -1)) {
 		if ((res = sendmsg(SCTP_BASE_VAR(userspace_rawsctp6), &msg_hdr, MSG_DONTWAIT)) != send_len) {
 			*result = errno;
 		}
 	}
-	if ((use_udp_tunneling) && (SCTP_BASE_VAR(userspace_udpsctp6) != -1)) {
+	if ((use_udp_tunneling) && (SCTP_BASE_VAR(userspace_udpsctp6) > -1)) {
 		if ((res = sendmsg(SCTP_BASE_VAR(userspace_udpsctp6), &msg_hdr, MSG_DONTWAIT)) != send_len) {
 			*result = errno;
 		}
@@ -3172,14 +3202,14 @@ void sctp_userspace_ip6_output(int *result, struct mbuf *o_pak,
 	win_msg_hdr.Control = winbuf;
 	win_msg_hdr.dwFlags = 0;
 
-	if ((!use_udp_tunneling) && (SCTP_BASE_VAR(userspace_rawsctp6) != -1)) {
+	if ((!use_udp_tunneling) && (SCTP_BASE_VAR(userspace_rawsctp6) > -1)) {
 		if (WSASendTo(SCTP_BASE_VAR(userspace_rawsctp6), (LPWSABUF) send_iovec, iovcnt, &win_sent_len, win_msg_hdr.dwFlags, win_msg_hdr.name, (int) win_msg_hdr.namelen, NULL, NULL) != 0) {
 			*result = WSAGetLastError();
 		} else if (win_sent_len != send_len) {
 			*result = WSAGetLastError();
 		}
 	}
-	if ((use_udp_tunneling) && (SCTP_BASE_VAR(userspace_udpsctp6) != -1)) {
+	if ((use_udp_tunneling) && (SCTP_BASE_VAR(userspace_udpsctp6) > -1)) {
 		if (WSASendTo(SCTP_BASE_VAR(userspace_udpsctp6), (LPWSABUF) send_iovec, iovcnt, &win_sent_len, win_msg_hdr.dwFlags, win_msg_hdr.name, (int) win_msg_hdr.namelen, NULL, NULL) != 0) {
 			*result = WSAGetLastError();
 		} else if (win_sent_len != send_len) {
@@ -3243,7 +3273,7 @@ usrsctp_dumppacket(const void *buf, size_t len, int outbound)
 {
 	size_t i, pos;
 	char *dump_buf, *packet;
-#ifdef _WIN32
+#ifdef _MSC_VER
 	struct timeb tb;
 	struct tm t;
 #else
@@ -3259,7 +3289,7 @@ usrsctp_dumppacket(const void *buf, size_t len, int outbound)
 		return (NULL);
 	}
 	pos = 0;
-#ifdef _WIN32
+#ifdef _MSC_VER
 	ftime(&tb);
 	localtime_s(&t, &tb.time);
 	_snprintf_s(dump_buf, PREAMBLE_LENGTH + 1, PREAMBLE_LENGTH, PREAMBLE_FORMAT,
@@ -3274,7 +3304,7 @@ usrsctp_dumppacket(const void *buf, size_t len, int outbound)
 	         t->tm_hour, t->tm_min, t->tm_sec, (long)tv.tv_usec);
 #endif
 	pos += PREAMBLE_LENGTH;
-#ifdef _WIN32
+#ifdef _MSC_VER
 	strncpy_s(dump_buf + pos, strlen(HEADER) + 1, HEADER, strlen(HEADER));
 #else
 	strcpy(dump_buf + pos, HEADER);
@@ -3291,7 +3321,7 @@ usrsctp_dumppacket(const void *buf, size_t len, int outbound)
 		dump_buf[pos++] = low < 10 ? '0' + low : 'a' + (low - 10);
 		dump_buf[pos++] = ' ';
 	}
-#ifdef _WIN32
+#ifdef _MSC_VER
 	strncpy_s(dump_buf + pos, strlen(TRAILER) + 1, TRAILER, strlen(TRAILER));
 #else
 	strcpy(dump_buf + pos, TRAILER);
@@ -3305,29 +3335,6 @@ void
 usrsctp_freedumpbuffer(char *buf)
 {
 	free(buf);
-}
-
-void
-usrsctp_enable_crc32c_offload(void)
-{
-	SCTP_BASE_VAR(crc32c_offloaded) = 1;
-}
-
-void
-usrsctp_disable_crc32c_offload(void)
-{
-	SCTP_BASE_VAR(crc32c_offloaded) = 0;
-}
-
-/* Compute the CRC32C in network byte order */
-uint32_t
-usrsctp_crc32c(void *buffer, size_t length)
-{
-	uint32_t base = 0xffffffff;
-
-	base = calculate_crc32c(0xffffffff, (unsigned char *)buffer, (unsigned int) length);
-	base = sctp_finalize_crc32c(base);
-	return (base);
 }
 
 void
@@ -3352,10 +3359,10 @@ usrsctp_conninput(void *addr, const void *buffer, size_t length, uint8_t ecn_bit
 	dst.sconn_len = sizeof(struct sockaddr_conn);
 #endif
 	dst.sconn_addr = addr;
-	if ((m = sctp_get_mbuf_for_msg((unsigned int)length, 1, M_NOWAIT, 0, MT_DATA)) == NULL) {
+	if ((m = sctp_get_mbuf_for_msg(length, 1, M_NOWAIT, 0, MT_DATA)) == NULL) {
 		return;
 	}
-	m_copyback(m, 0, (int)length, (caddr_t)buffer);
+	m_copyback(m, 0, length, (caddr_t)buffer);
 	if (SCTP_BUF_LEN(m) < (int)(sizeof(struct sctphdr) + sizeof(struct sctp_chunkhdr))) {
 		if ((m = m_pullup(m, sizeof(struct sctphdr) + sizeof(struct sctp_chunkhdr))) == NULL) {
 			SCTP_STAT_INCR(sctps_hdrops);
@@ -3366,12 +3373,12 @@ usrsctp_conninput(void *addr, const void *buffer, size_t length, uint8_t ecn_bit
 	ch = (struct sctp_chunkhdr *)((caddr_t)sh + sizeof(struct sctphdr));
 	src.sconn_port = sh->src_port;
 	dst.sconn_port = sh->dest_port;
-	sctp_common_input_processing(&m, 0, sizeof(struct sctphdr), (int)length,
+	sctp_common_input_processing(&m, 0, sizeof(struct sctphdr), length,
 	                             (struct sockaddr *)&src,
 	                             (struct sockaddr *)&dst,
 	                             sh, ch,
 #if !defined(SCTP_WITH_NO_CSUM)
-	                             SCTP_BASE_VAR(crc32c_offloaded) == 1 ? 0 : 1,
+	                             1,
 #endif
 	                             ecn_bits,
 	                             SCTP_DEFAULT_VRFID, 0);
@@ -3381,6 +3388,10 @@ usrsctp_conninput(void *addr, const void *buffer, size_t length, uint8_t ecn_bit
 	return;
 }
 
+void usrsctp_fire_timer(int delta)
+{
+	sctp_handle_tick(MSEC_TO_TICKS(delta));
+}
 
 #define USRSCTP_SYSCTL_SET_DEF(__field) \
 void usrsctp_sysctl_set_ ## __field(uint32_t value) { \
@@ -3398,6 +3409,7 @@ USRSCTP_SYSCTL_SET_DEF(sctp_asconf_enable)
 USRSCTP_SYSCTL_SET_DEF(sctp_reconfig_enable)
 USRSCTP_SYSCTL_SET_DEF(sctp_nrsack_enable)
 USRSCTP_SYSCTL_SET_DEF(sctp_pktdrop_enable)
+USRSCTP_SYSCTL_SET_DEF(sctp_strict_sacks)
 #if !defined(SCTP_WITH_NO_CSUM)
 USRSCTP_SYSCTL_SET_DEF(sctp_no_csum_on_loopback)
 #endif
@@ -3425,7 +3437,6 @@ USRSCTP_SYSCTL_SET_DEF(sctp_init_rtx_max_default)
 USRSCTP_SYSCTL_SET_DEF(sctp_assoc_rtx_max_default)
 USRSCTP_SYSCTL_SET_DEF(sctp_path_rtx_max_default)
 USRSCTP_SYSCTL_SET_DEF(sctp_add_more_threshold)
-USRSCTP_SYSCTL_SET_DEF(sctp_nr_incoming_streams_default)
 USRSCTP_SYSCTL_SET_DEF(sctp_nr_outgoing_streams_default)
 USRSCTP_SYSCTL_SET_DEF(sctp_cmt_on_off)
 USRSCTP_SYSCTL_SET_DEF(sctp_cmt_use_dac)
@@ -3436,6 +3447,7 @@ USRSCTP_SYSCTL_SET_DEF(sctp_mbuf_threshold_count)
 USRSCTP_SYSCTL_SET_DEF(sctp_do_drain)
 USRSCTP_SYSCTL_SET_DEF(sctp_hb_maxburst)
 USRSCTP_SYSCTL_SET_DEF(sctp_abort_if_one_2_one_hits_limit)
+USRSCTP_SYSCTL_SET_DEF(sctp_strict_data_order)
 USRSCTP_SYSCTL_SET_DEF(sctp_min_residual)
 USRSCTP_SYSCTL_SET_DEF(sctp_max_retran_chunk)
 USRSCTP_SYSCTL_SET_DEF(sctp_logging_level)
@@ -3479,6 +3491,7 @@ USRSCTP_SYSCTL_GET_DEF(sctp_asconf_enable)
 USRSCTP_SYSCTL_GET_DEF(sctp_reconfig_enable)
 USRSCTP_SYSCTL_GET_DEF(sctp_nrsack_enable)
 USRSCTP_SYSCTL_GET_DEF(sctp_pktdrop_enable)
+USRSCTP_SYSCTL_GET_DEF(sctp_strict_sacks)
 #if !defined(SCTP_WITH_NO_CSUM)
 USRSCTP_SYSCTL_GET_DEF(sctp_no_csum_on_loopback)
 #endif
@@ -3506,7 +3519,6 @@ USRSCTP_SYSCTL_GET_DEF(sctp_init_rtx_max_default)
 USRSCTP_SYSCTL_GET_DEF(sctp_assoc_rtx_max_default)
 USRSCTP_SYSCTL_GET_DEF(sctp_path_rtx_max_default)
 USRSCTP_SYSCTL_GET_DEF(sctp_add_more_threshold)
-USRSCTP_SYSCTL_GET_DEF(sctp_nr_incoming_streams_default)
 USRSCTP_SYSCTL_GET_DEF(sctp_nr_outgoing_streams_default)
 USRSCTP_SYSCTL_GET_DEF(sctp_cmt_on_off)
 USRSCTP_SYSCTL_GET_DEF(sctp_cmt_use_dac)
@@ -3517,6 +3529,7 @@ USRSCTP_SYSCTL_GET_DEF(sctp_mbuf_threshold_count)
 USRSCTP_SYSCTL_GET_DEF(sctp_do_drain)
 USRSCTP_SYSCTL_GET_DEF(sctp_hb_maxburst)
 USRSCTP_SYSCTL_GET_DEF(sctp_abort_if_one_2_one_hits_limit)
+USRSCTP_SYSCTL_GET_DEF(sctp_strict_data_order)
 USRSCTP_SYSCTL_GET_DEF(sctp_min_residual)
 USRSCTP_SYSCTL_GET_DEF(sctp_max_retran_chunk)
 USRSCTP_SYSCTL_GET_DEF(sctp_logging_level)

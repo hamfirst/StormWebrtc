@@ -92,36 +92,51 @@ static void
 sctp_handle_ifamsg(unsigned char type, unsigned short index, struct sockaddr *sa)
 {
 	int rc;
-	struct ifaddrs *ifa, *ifas;
+	struct ifaddrs *ifa, *found_ifa = NULL;
 
 	/* handle only the types we want */
 	if ((type != RTM_NEWADDR) && (type != RTM_DELADDR)) {
 		return;
 	}
 
-	rc = getifaddrs(&ifas);
+	rc = getifaddrs(&g_interfaces);
 	if (rc != 0) {
 		return;
 	}
-	for (ifa = ifas; ifa; ifa = ifa->ifa_next) {
+	for (ifa = g_interfaces; ifa; ifa = ifa->ifa_next) {
 		if (index == if_nametoindex(ifa->ifa_name)) {
+			found_ifa = ifa;
 			break;
 		}
 	}
-	if (ifa == NULL) {
-		freeifaddrs(ifas);
+	if (found_ifa == NULL) {
 		return;
+	}
+
+	switch (sa->sa_family) {
+#ifdef INET
+	case AF_INET:
+		ifa->ifa_addr = (struct sockaddr *)malloc(sizeof(struct sockaddr_in));
+		memcpy(ifa->ifa_addr, sa, sizeof(struct sockaddr_in));
+		break;
+#endif
+#ifdef INET6
+	case AF_INET6:
+		ifa->ifa_addr = (struct sockaddr *)malloc(sizeof(struct sockaddr_in6));
+		memcpy(ifa->ifa_addr, sa, sizeof(struct sockaddr_in6));
+		break;
+#endif
+	default:
+		SCTPDBG(SCTP_DEBUG_USR, "Address family %d not supported.\n", sa->sa_family);
 	}
 
 	/* relay the appropriate address change to the base code */
 	if (type == RTM_NEWADDR) {
-		(void)sctp_add_addr_to_vrf(SCTP_DEFAULT_VRFID,
-		                           NULL,
-		                           if_nametoindex(ifa->ifa_name),
+		(void)sctp_add_addr_to_vrf(SCTP_DEFAULT_VRFID, ifa, if_nametoindex(ifa->ifa_name),
 		                           0,
 		                           ifa->ifa_name,
-		                           NULL,
-		                           sa,
+		                           (void *)ifa,
+		                           ifa->ifa_addr,
 		                           0,
 		                           1);
 	} else {
@@ -129,7 +144,6 @@ sctp_handle_ifamsg(unsigned char type, unsigned short index, struct sockaddr *sa
 		                       if_nametoindex(ifa->ifa_name),
 		                       ifa->ifa_name);
 	}
-	freeifaddrs(ifas);
 }
 
 static void *
@@ -408,10 +422,7 @@ recv_function_raw(void *arg)
 #if defined(SCTP_WITH_NO_CSUM)
 		SCTP_STAT_INCR(sctps_recvnocrc);
 #else
-		if (SCTP_BASE_SYSCTL(sctp_no_csum_on_loopback) &&
-		    ((IN4_ISLOOPBACK_ADDRESS(&src.sin_addr) &&
-		      IN4_ISLOOPBACK_ADDRESS(&dst.sin_addr)) ||
-		     (src.sin_addr.s_addr == dst.sin_addr.s_addr))) {
+		if (src.sin_addr.s_addr == dst.sin_addr.s_addr) {
 			compute_crc = 0;
 			SCTP_STAT_INCR(sctps_recvnocrc);
 		} else {
@@ -1042,13 +1053,8 @@ recv_function_udp6(void *arg)
 }
 #endif
 
-#if defined (__Userspace_os_Windows)
-static void
-setReceiveBufferSize(SOCKET sfd, int new_size)
-#else
 static void
 setReceiveBufferSize(int sfd, int new_size)
-#endif
 {
 	int ch = new_size;
 
@@ -1062,13 +1068,8 @@ setReceiveBufferSize(int sfd, int new_size)
 	return;
 }
 
-#if defined (__Userspace_os_Windows)
-static void
-setSendBufferSize(SOCKET sfd, int new_size)
-#else
 static void
 setSendBufferSize(int sfd, int new_size)
-#endif
 {
 	int ch = new_size;
 
@@ -1107,7 +1108,7 @@ recv_thread_init(void)
 #endif
 #if defined(__Userspace_os_Darwin) || defined(__Userspace_os_DragonFly) || defined(__Userspace_os_FreeBSD)
 	if (SCTP_BASE_VAR(userspace_route) == -1) {
-		if ((SCTP_BASE_VAR(userspace_route) = socket(AF_ROUTE, SOCK_RAW, 0)) == -1) {
+		if ((SCTP_BASE_VAR(userspace_route) = socket(AF_ROUTE, SOCK_RAW, 0)) < 0) {
 			SCTPDBG(SCTP_DEBUG_USR, "Can't create routing socket (errno = %d).\n", errno);
 		}
 #if 0
@@ -1146,7 +1147,7 @@ recv_thread_init(void)
 #endif
 #if defined(INET)
 	if (SCTP_BASE_VAR(userspace_rawsctp) == -1) {
-		if ((SCTP_BASE_VAR(userspace_rawsctp) = socket(AF_INET, SOCK_RAW, IPPROTO_SCTP)) == -1) {
+		if ((SCTP_BASE_VAR(userspace_rawsctp) = socket(AF_INET, SOCK_RAW, IPPROTO_SCTP)) < 0) {
 #if defined(__Userspace_os_Windows)
 			SCTPDBG(SCTP_DEBUG_USR, "Can't create raw socket for IPv4 (errno = %d).\n", WSAGetLastError());
 #else
@@ -1197,7 +1198,7 @@ recv_thread_init(void)
 		}
 	}
 	if (SCTP_BASE_VAR(userspace_udpsctp) == -1) {
-		if ((SCTP_BASE_VAR(userspace_udpsctp) = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+		if ((SCTP_BASE_VAR(userspace_udpsctp) = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
 #if defined(__Userspace_os_Windows)
 			SCTPDBG(SCTP_DEBUG_USR, "Can't create socket for SCTP/UDP/IPv4 (errno = %d).\n", WSAGetLastError());
 #else
@@ -1261,7 +1262,7 @@ recv_thread_init(void)
 #endif
 #if defined(INET6)
 	if (SCTP_BASE_VAR(userspace_rawsctp6) == -1) {
-		if ((SCTP_BASE_VAR(userspace_rawsctp6) = socket(AF_INET6, SOCK_RAW, IPPROTO_SCTP)) == -1) {
+		if ((SCTP_BASE_VAR(userspace_rawsctp6) = socket(AF_INET6, SOCK_RAW, IPPROTO_SCTP)) < 0) {
 #if defined(__Userspace_os_Windows)
 			SCTPDBG(SCTP_DEBUG_USR, "Can't create socket for SCTP/IPv6 (errno = %d).\n", WSAGetLastError());
 #else
@@ -1334,7 +1335,7 @@ recv_thread_init(void)
 		}
 	}
 	if (SCTP_BASE_VAR(userspace_udpsctp6) == -1) {
-		if ((SCTP_BASE_VAR(userspace_udpsctp6) = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+		if ((SCTP_BASE_VAR(userspace_udpsctp6) = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
 #if defined(__Userspace_os_Windows)
 			SCTPDBG(SCTP_DEBUG_USR, "Can't create socket for SCTP/UDP/IPv6 (errno = %d).\n", WSAGetLastError());
 #else
@@ -1405,12 +1406,13 @@ recv_thread_init(void)
 		}
 	}
 #endif
+#if !defined(__Userspace_os_Windows)
 #if defined(__Userspace_os_Darwin) || defined(__Userspace_os_DragonFly) || defined(__Userspace_os_FreeBSD)
 #if defined(INET) || defined(INET6)
 	if (SCTP_BASE_VAR(userspace_route) != -1) {
 		int rc;
 
-		if ((rc = sctp_userspace_thread_create(&SCTP_BASE_VAR(recvthreadroute), &recv_function_route))) {
+		if ((rc = pthread_create(&SCTP_BASE_VAR(recvthreadroute), NULL, &recv_function_route, NULL))) {
 			SCTPDBG(SCTP_DEBUG_USR, "Can't start routing thread (%d).\n", rc);
 			close(SCTP_BASE_VAR(userspace_route));
 			SCTP_BASE_VAR(userspace_route) = -1;
@@ -1422,26 +1424,18 @@ recv_thread_init(void)
 	if (SCTP_BASE_VAR(userspace_rawsctp) != -1) {
 		int rc;
 
-		if ((rc = sctp_userspace_thread_create(&SCTP_BASE_VAR(recvthreadraw), &recv_function_raw))) {
+		if ((rc = pthread_create(&SCTP_BASE_VAR(recvthreadraw), NULL, &recv_function_raw, NULL))) {
 			SCTPDBG(SCTP_DEBUG_USR, "Can't start SCTP/IPv4 recv thread (%d).\n", rc);
-#if defined(__Userspace_os_Windows)
-			closesocket(SCTP_BASE_VAR(userspace_rawsctp));
-#else
 			close(SCTP_BASE_VAR(userspace_rawsctp));
-#endif
 			SCTP_BASE_VAR(userspace_rawsctp) = -1;
 		}
 	}
 	if (SCTP_BASE_VAR(userspace_udpsctp) != -1) {
 		int rc;
 
-		if ((rc = sctp_userspace_thread_create(&SCTP_BASE_VAR(recvthreadudp), &recv_function_udp))) {
+		if ((rc = pthread_create(&SCTP_BASE_VAR(recvthreadudp), NULL, &recv_function_udp, NULL))) {
 			SCTPDBG(SCTP_DEBUG_USR, "Can't start SCTP/UDP/IPv4 recv thread (%d).\n", rc);
-#if defined(__Userspace_os_Windows)
-			closesocket(SCTP_BASE_VAR(userspace_udpsctp));
-#else
 			close(SCTP_BASE_VAR(userspace_udpsctp));
-#endif
 			SCTP_BASE_VAR(userspace_udpsctp) = -1;
 		}
 	}
@@ -1450,29 +1444,55 @@ recv_thread_init(void)
 	if (SCTP_BASE_VAR(userspace_rawsctp6) != -1) {
 		int rc;
 
-		if ((rc = sctp_userspace_thread_create(&SCTP_BASE_VAR(recvthreadraw6), &recv_function_raw6))) {
+		if ((rc = pthread_create(&SCTP_BASE_VAR(recvthreadraw6), NULL, &recv_function_raw6, NULL))) {
 			SCTPDBG(SCTP_DEBUG_USR, "Can't start SCTP/IPv6 recv thread (%d).\n", rc);
-#if defined(__Userspace_os_Windows)
-			closesocket(SCTP_BASE_VAR(userspace_rawsctp6));
-#else
 			close(SCTP_BASE_VAR(userspace_rawsctp6));
-#endif
 			SCTP_BASE_VAR(userspace_rawsctp6) = -1;
 		}
 	}
 	if (SCTP_BASE_VAR(userspace_udpsctp6) != -1) {
 		int rc;
 
-		if ((rc = sctp_userspace_thread_create(&SCTP_BASE_VAR(recvthreadudp6), &recv_function_udp6))) {
+		if ((rc = pthread_create(&SCTP_BASE_VAR(recvthreadudp6), NULL, &recv_function_udp6, NULL))) {
 			SCTPDBG(SCTP_DEBUG_USR, "Can't start SCTP/UDP/IPv6 recv thread (%d).\n", rc);
-#if defined(__Userspace_os_Windows)
-			closesocket(SCTP_BASE_VAR(userspace_udpsctp6));
-#else
 			close(SCTP_BASE_VAR(userspace_udpsctp6));
-#endif
 			SCTP_BASE_VAR(userspace_udpsctp6) = -1;
 		}
 	}
+#endif
+#else
+#if defined(INET)
+	if (SCTP_BASE_VAR(userspace_rawsctp) != -1) {
+		if ((SCTP_BASE_VAR(recvthreadraw) = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&recv_function_raw, NULL, 0, NULL)) == NULL) {
+			SCTPDBG(SCTP_DEBUG_USR, "Can't start SCTP/IPv4 recv thread.\n");
+			closesocket(SCTP_BASE_VAR(userspace_rawsctp));
+			SCTP_BASE_VAR(userspace_rawsctp) = -1;
+		}
+	}
+	if (SCTP_BASE_VAR(userspace_udpsctp) != -1) {
+		if ((SCTP_BASE_VAR(recvthreadudp) = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&recv_function_udp, NULL, 0, NULL)) == NULL) {
+			SCTPDBG(SCTP_DEBUG_USR, "Can't start SCTP/UDP/IPv4 recv thread.\n");
+			closesocket(SCTP_BASE_VAR(userspace_udpsctp));
+			SCTP_BASE_VAR(userspace_udpsctp) = -1;
+		}
+	}
+#endif
+#if defined(INET6)
+	if (SCTP_BASE_VAR(userspace_rawsctp6) != -1) {
+		if ((SCTP_BASE_VAR(recvthreadraw6) = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&recv_function_raw6, NULL, 0, NULL)) == NULL) {
+			SCTPDBG(SCTP_DEBUG_USR, "Can't start SCTP/IPv6 recv thread.\n");
+			closesocket(SCTP_BASE_VAR(userspace_rawsctp6));
+			SCTP_BASE_VAR(userspace_rawsctp6) = -1;
+		}
+	}
+	if (SCTP_BASE_VAR(userspace_udpsctp6) != -1) {
+		if ((SCTP_BASE_VAR(recvthreadudp6) = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&recv_function_udp6, NULL, 0, NULL)) == NULL) {
+			SCTPDBG(SCTP_DEBUG_USR, "Can't start SCTP/UDP/IPv6 recv thread.\n");
+			closesocket(SCTP_BASE_VAR(userspace_udpsctp6));
+			SCTP_BASE_VAR(userspace_udpsctp6) = -1;
+		}
+	}
+#endif
 #endif
 }
 

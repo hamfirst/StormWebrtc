@@ -77,7 +77,7 @@
 	} \
 }
 #endif
-#if defined(__Userspace_os_Windows)
+#if defined(__Userspace_os_Windows) && defined(_MSC_VER)
 static void atomic_init() {} /* empty when we are not using atomic_mtx */
 #else
 static inline void atomic_init() {} /* empty when we are not using atomic_mtx */
@@ -89,6 +89,41 @@ static inline void atomic_init() {} /* empty when we are not using atomic_mtx */
    Requires gcc version 4.1.0
    compile with -march=i486
  */
+
+#if defined(SCTP_NO_ATOMIC)
+
+static inline void dummy_atomic_add(u_int *p, u_int v)
+{
+	*p += v;
+}
+
+static inline void dummy_atomic_subtract(u_int *p, u_int v)
+{
+	*p -= v;
+}
+
+static inline u_int dummy_atomic_fetchadd(u_int *p, u_int v)
+{
+	u_int tmp = *p;
+	*p += v;
+	return tmp;
+}
+
+static inline u_int dummy_atomic_cmpset(u_int* p, u_int cmpval, u_int newval)
+{
+	u_int tmp = *p;
+	if (tmp == cmpval) {
+		*p = newval;
+	}
+	return tmp;
+}
+
+#define atomic_add_int(P, V) dummy_atomic_add((u_int*) P, V)
+#define atomic_subtract_int(P, V) dummy_atomic_subtract((u_int*) P, V)
+#define atomic_fetchadd_int(P, V) dummy_atomic_fetchadd((u_int*) P, V)
+#define atomic_cmpset_int(dst, exp, src) dummy_atomic_cmpset((u_int*) dst, exp, src)
+
+#else
 
 /*Atomically add V to *P.*/
 #define atomic_add_int(P, V)	 (void) __sync_fetch_and_add(P, V)
@@ -111,6 +146,8 @@ static inline void atomic_init() {} /* empty when we are not using atomic_mtx */
  */
 
 #define atomic_cmpset_int(dst, exp, src) __sync_bool_compare_and_swap(dst, exp, src)
+
+#endif
 
 #define SCTP_DECREMENT_AND_CHECK_REFCOUNT(addr) (atomic_fetchadd_int(addr, -1) == 1)
 #if defined(INVARIANTS)

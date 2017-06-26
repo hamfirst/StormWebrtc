@@ -32,7 +32,7 @@
 
 #ifdef __FreeBSD__
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD: head/sys/netinet/sctp_constants.h 309682 2016-12-07 19:30:59Z tuexen $");
+__FBSDID("$FreeBSD: head/sys/netinet/sctp_constants.h 287669 2015-09-11 13:54:33Z tuexen $");
 #endif
 
 #ifndef _NETINET_SCTP_CONSTANTS_H_
@@ -73,8 +73,6 @@ extern void getwintimeofday(struct timeval *tv);
 
 /* Largest length of a chunk */
 #define SCTP_MAX_CHUNK_LENGTH 0xffff
-/* Largest length of an error cause */
-#define SCTP_MAX_CAUSE_LENGTH 0xffff
 /* Number of addresses where we just skip the counting */
 #define SCTP_COUNT_LIMIT 40
 
@@ -280,7 +278,7 @@ extern void getwintimeofday(struct timeval *tv);
 #define SCTP_DEFAULT_MULTIPLE_ASCONFS	0
 
 /*
- * Threshold for rwnd updates, we have to read (sb_hiwat >>
+ * Theshold for rwnd updates, we have to read (sb_hiwat >>
  * SCTP_RWND_HIWAT_SHIFT) before we will look to see if we need to send a
  * window update sack. When we look, we compare the last rwnd we sent vs the
  * current rwnd. It too must be greater than this value. Using 3 divdes the
@@ -350,7 +348,6 @@ extern void getwintimeofday(struct timeval *tv);
 #define SCTP_RTT_FROM_NON_DATA 0
 #define SCTP_RTT_FROM_DATA     1
 
-#define PR_SCTP_UNORDERED_FLAG 0x0001
 
 /* IP hdr (20/40) + 12+2+2 (enet) + sctp common 12 */
 #define SCTP_FIRST_MBUF_RESV 68
@@ -392,8 +389,8 @@ extern void getwintimeofday(struct timeval *tv);
 /* align to 32-bit sizes */
 #define SCTP_SIZE32(x)	((((x) + 3) >> 2) << 2)
 
-#define IS_SCTP_CONTROL(a) (((a)->chunk_type != SCTP_DATA) && ((a)->chunk_type != SCTP_IDATA))
-#define IS_SCTP_DATA(a) (((a)->chunk_type == SCTP_DATA) || ((a)->chunk_type == SCTP_IDATA))
+#define IS_SCTP_CONTROL(a) ((a)->chunk_type != SCTP_DATA)
+#define IS_SCTP_DATA(a) ((a)->chunk_type == SCTP_DATA)
 
 
 /* SCTP parameter types */
@@ -522,7 +519,7 @@ extern void getwintimeofday(struct timeval *tv);
 /* Maximum the mapping array will  grow to (TSN mapping array) */
 #define SCTP_MAPPING_ARRAY	512
 
-/* size of the initial malloc on the mapping array */
+/* size of the inital malloc on the mapping array */
 #define SCTP_INITIAL_MAPPING_ARRAY  16
 /* how much we grow the mapping array each call */
 #define SCTP_MAPPING_ARRAY_INCR     32
@@ -655,7 +652,7 @@ extern void getwintimeofday(struct timeval *tv);
 #define SCTP_DEF_PMTU_RAISE_SEC	600	/* 10 min between raise attempts */
 
 
-/* How many streams I request initially by default */
+/* How many streams I request initally by default */
 #define SCTP_OSTREAM_INITIAL 10
 #define SCTP_ISTREAM_INITIAL 2048
 
@@ -912,20 +909,12 @@ extern void getwintimeofday(struct timeval *tv);
 
 /* modular comparison */
 /* See RFC 1982 for details. */
-#define SCTP_UINT16_GT(a, b) (((a < b) && ((uint16_t)(b - a) > (1U<<15))) || \
-                              ((a > b) && ((uint16_t)(a - b) < (1U<<15))))
-#define SCTP_UINT16_GE(a, b) (SCTP_UINT16_GT(a, b) || (a == b))
-#define SCTP_UINT32_GT(a, b) (((a < b) && ((uint32_t)(b - a) > (1U<<31))) || \
-                              ((a > b) && ((uint32_t)(a - b) < (1U<<31))))
-#define SCTP_UINT32_GE(a, b) (SCTP_UINT32_GT(a, b) || (a == b))
-
-#define SCTP_SSN_GT(a, b) SCTP_UINT16_GT(a, b)
-#define SCTP_SSN_GE(a, b) SCTP_UINT16_GE(a, b)
-#define SCTP_TSN_GT(a, b) SCTP_UINT32_GT(a, b)
-#define SCTP_TSN_GE(a, b) SCTP_UINT32_GE(a, b)
-#define SCTP_MID_GT(i, a, b) (((i) == 1) ? SCTP_UINT32_GT(a, b) : SCTP_UINT16_GT((uint16_t)a, (uint16_t)b))
-#define SCTP_MID_GE(i, a, b) (((i) == 1) ? SCTP_UINT32_GE(a, b) : SCTP_UINT16_GE((uint16_t)a, (uint16_t)b))
-#define SCTP_MID_EQ(i, a, b) (((i) == 1) ? a == b : (uint16_t)a == (uint16_t)b)
+#define SCTP_SSN_GT(a, b) (((a < b) && ((uint16_t)(b - a) > (1U<<15))) || \
+                           ((a > b) && ((uint16_t)(a - b) < (1U<<15))))
+#define SCTP_SSN_GE(a, b) (SCTP_SSN_GT(a, b) || (a == b))
+#define SCTP_TSN_GT(a, b) (((a < b) && ((uint32_t)(b - a) > (1U<<31))) || \
+                           ((a > b) && ((uint32_t)(a - b) < (1U<<31))))
+#define SCTP_TSN_GE(a, b) (SCTP_TSN_GT(a, b) || (a == b))
 
 /* Mapping array manipulation routines */
 #define SCTP_IS_TSN_PRESENT(arry, gap) ((arry[(gap >> 3)] >> (gap & 0x07)) & 0x01)
@@ -948,7 +937,7 @@ extern void getwintimeofday(struct timeval *tv);
  * element.  Each entry will take 2 4 byte ints (and of course the overhead
  * of the next pointer as well). Using 15 as an example will yield * ((8 *
  * 15) + 8) or 128 bytes of overhead for each timewait block that gets
- * initialized. Increasing it to 31 would yield 256 bytes per block.
+ * initialized. Increasing it to 31 would yeild 256 bytes per block.
  */
 #define SCTP_NUMBER_IN_VTAG_BLOCK 15
 /*
@@ -1014,7 +1003,10 @@ extern void getwintimeofday(struct timeval *tv);
      (((uint8_t *)&(a)->s_addr)[1] == 168)))
 
 #define IN4_ISLOOPBACK_ADDRESS(a) \
-    (((uint8_t *)&(a)->s_addr)[0] == 127)
+    ((((uint8_t *)&(a)->s_addr)[0] == 127) && \
+     (((uint8_t *)&(a)->s_addr)[1] == 0) && \
+     (((uint8_t *)&(a)->s_addr)[2] == 0) && \
+     (((uint8_t *)&(a)->s_addr)[3] == 1))
 
 #define IN4_ISLINKLOCAL_ADDRESS(a) \
     ((((uint8_t *)&(a)->s_addr)[0] == 169) && \

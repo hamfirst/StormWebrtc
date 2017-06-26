@@ -84,9 +84,9 @@ MALLOC_DECLARE(M_SONAME);
 */
 struct uio {
     struct	iovec *uio_iov;		/* scatter/gather list */
-    int		uio_iovcnt;		/* length of scatter/gather list */
+    int	        uio_iovcnt;		/* length of scatter/gather list */
     off_t	uio_offset;		/* offset in target object */
-    ssize_t 	uio_resid;		/* remaining bytes to process */
+    int 	uio_resid;		/* remaining bytes to process */
     enum	uio_seg uio_segflg;	/* address space */
     enum	uio_rw uio_rw;		/* operation */
 };
@@ -102,13 +102,17 @@ struct uio {
  */
 #if defined (__Userspace_os_Windows)
 #define AF_ROUTE  17
+#ifdef _MSC_VER
 typedef __int32 pid_t;
+#endif
 typedef unsigned __int32 uid_t;
 enum sigType {
 	SIGNAL = 0,
 	BROADCAST = 1,
 	MAX_EVENTS = 2
 };
+#elif defined (__ANDROID__)
+typedef int32_t u_quad_t;
 #endif
 
 /*-
@@ -363,6 +367,13 @@ extern userland_cond_t accept_cond;
  */
 #define	SQ_INCOMP		0x0800	/* unaccepted, incomplete connection */
 #define	SQ_COMP			0x1000	/* unaccepted, complete connection */
+
+/*
+ * Socket event flags
+ */
+#define SCTP_EVENT_READ		0x0001	/* socket is readable */
+#define SCTP_EVENT_WRITE	0x0002	/* socket is writeable */
+#define SCTP_EVENT_ERROR	0x0004	/* socket has an error state */
 
 /*
  * Externalized form of struct socket used by the sysctl(3) interface.

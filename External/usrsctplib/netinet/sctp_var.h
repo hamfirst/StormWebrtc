@@ -32,7 +32,7 @@
 
 #ifdef __FreeBSD__
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD: head/sys/netinet/sctp_var.h 309682 2016-12-07 19:30:59Z tuexen $");
+__FBSDID("$FreeBSD: head/sys/netinet/sctp_var.h 284384 2015-06-14 17:48:44Z tuexen $");
 #endif
 
 #ifndef _NETINET_SCTP_VAR_H_
@@ -101,19 +101,11 @@ extern struct pr_usrreqs sctp_usrreqs;
  * an mbuf cache as well so it is not really worth doing, at least
  * right now :-D
  */
-#ifdef INVARIANTS
-#define sctp_free_a_readq(_stcb, _readq) { \
-	if ((_readq)->on_strm_q) \
-		panic("On strm q stcb:%p readq:%p", (_stcb), (_readq)); \
-	SCTP_ZONE_FREE(SCTP_BASE_INFO(ipi_zone_readq), (_readq)); \
-	SCTP_DECR_READQ_COUNT(); \
-}
-#else
+
 #define sctp_free_a_readq(_stcb, _readq) { \
 	SCTP_ZONE_FREE(SCTP_BASE_INFO(ipi_zone_readq), (_readq)); \
 	SCTP_DECR_READQ_COUNT(); \
 }
-#endif
 
 #define sctp_alloc_a_readq(_stcb, _readq) { \
 	(_readq) = SCTP_ZONE_GET(SCTP_BASE_INFO(ipi_zone_readq), struct sctp_queued_to_read); \
@@ -224,7 +216,7 @@ extern struct pr_usrreqs sctp_usrreqs;
 	atomic_add_int(&(sb)->sb_cc,SCTP_BUF_LEN((m))); \
 	atomic_add_int(&(sb)->sb_mbcnt, MSIZE); \
 	if (stcb) { \
-		atomic_add_int(&(stcb)->asoc.sb_cc, SCTP_BUF_LEN((m))); \
+		atomic_add_int(&(stcb)->asoc.sb_cc,SCTP_BUF_LEN((m))); \
 		atomic_add_int(&(stcb)->asoc.my_rwnd_control_len, MSIZE); \
 	} \
 	if (SCTP_BUF_TYPE(m) != MT_DATA && SCTP_BUF_TYPE(m) != MT_HEADER && \
@@ -340,7 +332,7 @@ extern struct pr_usrreqs sctp_usrreqs;
 	if (stcb->asoc.fs_index > SCTP_FS_SPEC_LOG_SIZE) \
 		stcb->asoc.fs_index = 0;\
 	stcb->asoc.fslog[stcb->asoc.fs_index].total_flight = stcb->asoc.total_flight; \
-	stcb->asoc.fslog[stcb->asoc.fs_index].tsn = tp1->rec.data.tsn; \
+	stcb->asoc.fslog[stcb->asoc.fs_index].tsn = tp1->rec.data.TSN_seq; \
 	stcb->asoc.fslog[stcb->asoc.fs_index].book = tp1->book_size; \
 	stcb->asoc.fslog[stcb->asoc.fs_index].sent = tp1->sent; \
 	stcb->asoc.fslog[stcb->asoc.fs_index].incr = 0; \
@@ -361,7 +353,7 @@ extern struct pr_usrreqs sctp_usrreqs;
 	if (stcb->asoc.fs_index > SCTP_FS_SPEC_LOG_SIZE) \
 		stcb->asoc.fs_index = 0;\
 	stcb->asoc.fslog[stcb->asoc.fs_index].total_flight = stcb->asoc.total_flight; \
-	stcb->asoc.fslog[stcb->asoc.fs_index].tsn = tp1->rec.data.tsn; \
+	stcb->asoc.fslog[stcb->asoc.fs_index].tsn = tp1->rec.data.TSN_seq; \
 	stcb->asoc.fslog[stcb->asoc.fs_index].book = tp1->book_size; \
 	stcb->asoc.fslog[stcb->asoc.fs_index].sent = tp1->sent; \
 	stcb->asoc.fslog[stcb->asoc.fs_index].incr = 1; \
@@ -421,7 +413,7 @@ void sctp_ctlinput(int, struct sockaddr *, void *);
 int sctp_ctloutput(struct socket *, struct sockopt *);
 #ifdef INET
 void sctp_input_with_port(struct mbuf *, int, uint16_t);
-#if defined(__FreeBSD__) && __FreeBSD_version >= 1100020
+#if defined(__FreeBSD__) && __FreeBSD_version >= 1100020  
 int sctp_input(struct mbuf **, int *, int);
 #else
 void sctp_input(struct mbuf *, int);
@@ -448,26 +440,28 @@ void sctp_drain(void);
 #if defined(__Userspace__)
 void sctp_init(uint16_t,
                int (*)(void *addr, void *buffer, size_t length, uint8_t tos, uint8_t set_df),
-               void (*)(const char *, ...));
+               void (*)(const char *, ...), int start_threads);
 #elif defined(__FreeBSD__) && __FreeBSD_version < 902000
 void sctp_init __P((void));
 #elif defined(__APPLE__) && (!defined(APPLE_LEOPARD) && !defined(APPLE_SNOWLEOPARD) &&!defined(APPLE_LION) && !defined(APPLE_MOUNTAINLION))
 void sctp_init(struct protosw *pp, struct domain *dp);
 #else
 void sctp_init(void);
-void sctp_notify(struct sctp_inpcb *, struct sctp_tcb *, struct sctp_nets *,
-    uint8_t, uint8_t, uint16_t, uint16_t);
 #endif
-#if !defined(__FreeBSD__)
 void sctp_finish(void);
-#endif
 #if defined(__FreeBSD__) || defined(__Windows__) || defined(__Userspace__)
 int sctp_flush(struct socket *, int);
 #endif
 #if defined(__FreeBSD__) && __FreeBSD_version < 902000
 int sctp_shutdown __P((struct socket *));
+void sctp_notify __P((struct sctp_inpcb *, struct ip *ip, struct sctphdr *,
+		struct sockaddr *, struct sctp_tcb *,
+		struct sctp_nets *));
 #else
 int sctp_shutdown(struct socket *);
+void sctp_notify(struct sctp_inpcb *, struct ip *ip, struct sctphdr *,
+		 struct sockaddr *, struct sctp_tcb *,
+		 struct sctp_nets *);
 #endif
 int sctp_bindx(struct socket *, int, struct sockaddr_storage *,
 	int, int, struct proc *);

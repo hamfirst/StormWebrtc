@@ -32,7 +32,7 @@
 
 #ifdef __FreeBSD__
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD: head/sys/netinet/sctp_timer.c 313030 2017-01-31 23:34:02Z tuexen $");
+__FBSDID("$FreeBSD: head/sys/netinet/sctp_timer.c 289240 2015-10-13 18:27:55Z tuexen $");
 #endif
 
 #define _IP_VHL
@@ -95,7 +95,7 @@ sctp_audit_retranmission_queue(struct sctp_association *asoc)
 		asoc->sent_queue_cnt);
 }
 
-static int
+int
 sctp_threshold_management(struct sctp_inpcb *inp, struct sctp_tcb *stcb,
     struct sctp_nets *net, uint16_t threshold)
 {
@@ -121,9 +121,9 @@ sctp_threshold_management(struct sctp_inpcb *inp, struct sctp_tcb *stcb,
 				net->last_active = sctp_get_tick_count();
 				sctp_send_hb(stcb, net, SCTP_SO_NOT_LOCKED);
 				sctp_timer_stop(SCTP_TIMER_TYPE_HEARTBEAT,
-				                inp, stcb, net,
+				                stcb->sctp_ep, stcb, net,
 				                SCTP_FROM_SCTP_TIMER + SCTP_LOC_1);
-				sctp_timer_start(SCTP_TIMER_TYPE_HEARTBEAT, inp, stcb, net);
+				sctp_timer_start(SCTP_TIMER_TYPE_HEARTBEAT, stcb->sctp_ep, stcb, net);
 			}
 		}
 	}
@@ -429,18 +429,13 @@ sctp_recover_sent_list(struct sctp_tcb *stcb)
 
 	asoc = &stcb->asoc;
 	TAILQ_FOREACH_SAFE(chk, &asoc->sent_queue, sctp_next, nchk) {
-		if (SCTP_TSN_GE(asoc->last_acked_seq, chk->rec.data.tsn)) {
+		if (SCTP_TSN_GE(asoc->last_acked_seq, chk->rec.data.TSN_seq)) {
 			SCTP_PRINTF("Found chk:%p tsn:%x <= last_acked_seq:%x\n",
-			            (void *)chk, chk->rec.data.tsn, asoc->last_acked_seq);
+			            (void *)chk, chk->rec.data.TSN_seq, asoc->last_acked_seq);
 			if (chk->sent != SCTP_DATAGRAM_NR_ACKED) {
-				if (asoc->strmout[chk->rec.data.sid].chunks_on_queues > 0) {
-					asoc->strmout[chk->rec.data.sid].chunks_on_queues--;
+				if (asoc->strmout[chk->rec.data.stream_number].chunks_on_queues > 0) {
+					asoc->strmout[chk->rec.data.stream_number].chunks_on_queues--;
 				}
-			}
-			if ((asoc->strmout[chk->rec.data.sid].chunks_on_queues == 0) &&
-			    (asoc->strmout[chk->rec.data.sid].state == SCTP_STREAM_RESET_PENDING) &&
-			    TAILQ_EMPTY(&asoc->strmout[chk->rec.data.sid].outqueue)) {
-				asoc->trigger_reset = 1;
 			}
 			TAILQ_REMOVE(&asoc->sent_queue, chk, sctp_next);
 			if (PR_SCTP_ENABLED(chk->flags)) {
@@ -462,7 +457,7 @@ sctp_recover_sent_list(struct sctp_tcb *stcb)
 	}
 	SCTP_PRINTF("after recover order is as follows\n");
 	TAILQ_FOREACH(chk, &asoc->sent_queue, sctp_next) {
-		SCTP_PRINTF("chk:%p TSN:%x\n", (void *)chk, chk->rec.data.tsn);
+		SCTP_PRINTF("chk:%p TSN:%x\n", (void *)chk, chk->rec.data.TSN_seq);
 	}
 }
 #endif
@@ -550,10 +545,10 @@ sctp_mark_all_for_resend(struct sctp_tcb *stcb,
  start_again:
 #endif
 	TAILQ_FOREACH_SAFE(chk, &stcb->asoc.sent_queue, sctp_next, nchk) {
-		if (SCTP_TSN_GE(stcb->asoc.last_acked_seq, chk->rec.data.tsn)) {
+		if (SCTP_TSN_GE(stcb->asoc.last_acked_seq, chk->rec.data.TSN_seq)) {
 			/* Strange case our list got out of order? */
 			SCTP_PRINTF("Our list is out of order? last_acked:%x chk:%x\n",
-			            (unsigned int)stcb->asoc.last_acked_seq, (unsigned int)chk->rec.data.tsn);
+			            (unsigned int)stcb->asoc.last_acked_seq, (unsigned int)chk->rec.data.TSN_seq);
 			recovery_cnt++;
 #ifdef INVARIANTS
 			panic("last acked >= chk on sent-Q");
@@ -578,7 +573,7 @@ sctp_mark_all_for_resend(struct sctp_tcb *stcb,
 
 			/* validate its been outstanding long enough */
 			if (SCTP_BASE_SYSCTL(sctp_logging_level) & SCTP_FR_LOGGING_ENABLE) {
-				sctp_log_fr(chk->rec.data.tsn,
+				sctp_log_fr(chk->rec.data.TSN_seq,
 					    chk->sent_rcv_time.tv_sec,
 					    chk->sent_rcv_time.tv_usec,
 					    SCTP_FR_T3_MARK_TIME);
@@ -646,11 +641,11 @@ sctp_mark_all_for_resend(struct sctp_tcb *stcb,
 				num_mk++;
 				if (fir == 0) {
 					fir = 1;
-					tsnfirst = chk->rec.data.tsn;
+					tsnfirst = chk->rec.data.TSN_seq;
 				}
-				tsnlast = chk->rec.data.tsn;
+				tsnlast = chk->rec.data.TSN_seq;
 				if (SCTP_BASE_SYSCTL(sctp_logging_level) & SCTP_FR_LOGGING_ENABLE) {
-					sctp_log_fr(chk->rec.data.tsn, chk->snd_count,
+					sctp_log_fr(chk->rec.data.TSN_seq, chk->snd_count,
 						    0, SCTP_FR_T3_MARKED);
 				}
 
@@ -665,8 +660,8 @@ sctp_mark_all_for_resend(struct sctp_tcb *stcb,
 					sctp_misc_ints(SCTP_FLIGHT_LOG_DOWN_RSND_TO,
 						       chk->whoTo->flight_size,
 						       chk->book_size,
-						       (uint32_t)(uintptr_t)chk->whoTo,
-						       chk->rec.data.tsn);
+						       (uintptr_t)chk->whoTo,
+						       chk->rec.data.TSN_seq);
 				}
 				sctp_flight_size_decrease(chk);
 				sctp_total_flight_decrease(stcb, chk);
@@ -696,7 +691,7 @@ sctp_mark_all_for_resend(struct sctp_tcb *stcb,
 				if (TAILQ_EMPTY(&stcb->asoc.send_queue)) {
 					chk->rec.data.fast_retran_tsn = stcb->asoc.sending_seq;
 				} else {
-					chk->rec.data.fast_retran_tsn = (TAILQ_FIRST(&stcb->asoc.send_queue))->rec.data.tsn;
+					chk->rec.data.fast_retran_tsn = (TAILQ_FIRST(&stcb->asoc.send_queue))->rec.data.TSN_seq;
 				}
 			}
 			/* CMT: Do not allow FRs on retransmitted TSNs.
@@ -726,9 +721,13 @@ sctp_mark_all_for_resend(struct sctp_tcb *stcb,
 	if (num_mk) {
 		SCTPDBG(SCTP_DEBUG_TIMER1, "LAST TSN marked was %x\n",
 			tsnlast);
-		SCTPDBG(SCTP_DEBUG_TIMER1, "Num marked for retransmission was %d peer-rwd:%u\n",
+		SCTPDBG(SCTP_DEBUG_TIMER1, "Num marked for retransmission was %d peer-rwd:%ld\n",
+			num_mk, (u_long)stcb->asoc.peers_rwnd);
+		SCTPDBG(SCTP_DEBUG_TIMER1, "LAST TSN marked was %x\n",
+			tsnlast);
+		SCTPDBG(SCTP_DEBUG_TIMER1, "Num marked for retransmission was %d peer-rwd:%d\n",
 			num_mk,
-			stcb->asoc.peers_rwnd);
+			(int)stcb->asoc.peers_rwnd);
 	}
 #endif
 	*num_marked = num_mk;
@@ -789,8 +788,8 @@ sctp_mark_all_for_resend(struct sctp_tcb *stcb,
 					sctp_misc_ints(SCTP_FLIGHT_LOG_UP,
 						       chk->whoTo->flight_size,
 						       chk->book_size,
-						       (uint32_t)(uintptr_t)chk->whoTo,
-						       chk->rec.data.tsn);
+						       (uintptr_t)chk->whoTo,
+						       chk->rec.data.TSN_seq);
 				}
 
 				sctp_flight_size_increase(chk);
@@ -1078,8 +1077,8 @@ sctp_cookie_timer(struct sctp_inpcb *inp,
 		return (1);
 	}
 	/*
-	 * Cleared threshold management, now lets backoff the address
-	 * and select an alternate
+	 * cleared theshold management now lets backoff the address & select
+	 * an alternate
 	 */
 	stcb->asoc.dropped_special_cnt = 0;
 	sctp_backoff_on_timeout(stcb, cookie->whoTo, 1, 0, 0);
@@ -1124,8 +1123,8 @@ sctp_strreset_timer(struct sctp_inpcb *inp, struct sctp_tcb *stcb,
 		return (1);
 	}
 	/*
-	 * Cleared threshold management, now lets backoff the address
-	 * and select an alternate
+	 * cleared theshold management now lets backoff the address & select
+	 * an alternate
 	 */
 	sctp_backoff_on_timeout(stcb, strrst->whoTo, 1, 0, 0);
 	alt = sctp_find_alternate_net(stcb, strrst->whoTo, 0);
@@ -1284,7 +1283,7 @@ sctp_shutdown_timer(struct sctp_inpcb *inp, struct sctp_tcb *stcb,
 {
 	struct sctp_nets *alt;
 
-	/* first threshold management */
+	/* first threshold managment */
 	if (sctp_threshold_management(inp, stcb, net, stcb->asoc.max_send_times)) {
 		/* Assoc is over */
 		return (1);
@@ -1307,7 +1306,7 @@ sctp_shutdownack_timer(struct sctp_inpcb *inp, struct sctp_tcb *stcb,
 {
 	struct sctp_nets *alt;
 
-	/* first threshold management */
+	/* first threshold managment */
 	if (sctp_threshold_management(inp, stcb, net, stcb->asoc.max_send_times)) {
 		/* Assoc is over */
 		return (1);

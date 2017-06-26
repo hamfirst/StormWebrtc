@@ -45,6 +45,7 @@ extern "C" {
 #include <ws2tcpip.h>
 #else
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <netinet/in.h>
 #endif
 
@@ -67,13 +68,18 @@ extern "C" {
 #define uint8_t   unsigned __int8
 #define uint16_t  unsigned __int16
 #define uint32_t  unsigned __int32
-#define uint64_t  unsigned __int64
 #define int16_t   __int16
 #define int32_t   __int32
 #endif
 
 #define ssize_t   __int64
 #define MSG_EOR   0x8
+
+#ifdef SCTP_USE_WINSOCK_CODES
+#undef EWOULDBLOCK
+#undef EINPROGRESS
+#endif
+
 #ifndef EWOULDBLOCK
 #define EWOULDBLOCK  WSAEWOULDBLOCK
 #endif
@@ -87,31 +93,11 @@ extern "C" {
 
 typedef uint32_t sctp_assoc_t;
 
-#if defined(_WIN32) && defined(_MSC_VER)
-#pragma pack (push, 1)
-#define SCTP_PACKED
-#else
-#define SCTP_PACKED __attribute__((packed))
-#endif
-
-struct sctp_common_header {
-	uint16_t source_port;
-	uint16_t destination_port;
-	uint32_t verification_tag;
-	uint32_t crc32c;
-} SCTP_PACKED;
-
-#if defined(_WIN32) && defined(_MSC_VER)
-#pragma pack()
-#endif
-#undef SCTP_PACKED
-
 #define AF_CONN 123
 /* The definition of struct sockaddr_conn MUST be in
  * tune with other sockaddr_* structures.
  */
-#if defined(__APPLE__) || defined(__Bitrig__) || defined(__DragonFly__) || \
-    defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(HAVE_SCONN_LEN)
 struct sockaddr_conn {
 	uint8_t sconn_len;
 	uint8_t sconn_family;
@@ -263,6 +249,18 @@ struct sctp_assoc_change {
 	sctp_assoc_t sac_assoc_id;
 	uint8_t sac_info[]; /* not available yet */
 };
+
+#ifdef _WIN32
+
+struct iovec {
+	unsigned long len;
+	char *buf;
+};
+
+#define iov_base buf
+#define iov_len len
+
+#endif
 
 /* sac_state values */
 #define SCTP_COMM_UP        0x0001
@@ -543,10 +541,6 @@ struct sctp_event_subscribe {
 
 #define SCTP_ENABLE_STREAM_RESET        0x00000900 /* struct sctp_assoc_value */
 
-/* Pluggable Stream Scheduling Socket option */
-#define SCTP_PLUGGABLE_SS               0x00001203
-#define SCTP_SS_VALUE                   0x00001204
-
 /*
  * read-only options
  */
@@ -805,12 +799,6 @@ struct sctp_cc_option {
 	struct sctp_assoc_value aid_value;
 };
 
-struct sctp_stream_value {
-	sctp_assoc_t assoc_id;
-	uint16_t stream_id;
-	uint16_t stream_value;
-};
-
 struct sctp_timeouts {
 	sctp_assoc_t stimo_assoc_id;
 	uint32_t stimo_init;
@@ -866,6 +854,13 @@ struct sctp_prstatus {
 /* First-come, first-serve */
 #define SCTP_SS_FIRST_COME          0x00000005
 
+/*
+ * Socket event flags
+ */
+#define SCTP_EVENT_READ		0x00000001
+#define SCTP_EVENT_WRITE	0x00000002
+#define SCTP_EVENT_ERROR	0x00000004
+
 /******************** System calls *************/
 
 struct socket;
@@ -874,6 +869,11 @@ void
 usrsctp_init(uint16_t,
              int (*)(void *addr, void *buffer, size_t length, uint8_t tos, uint8_t set_df),
              void (*)(const char *format, ...));
+
+void
+usrsctp_init_nothreads(uint16_t,
+		       int (*)(void *addr, void *buffer, size_t length, uint8_t tos, uint8_t set_df),
+		       void (*)(const char *format, ...));
 
 struct socket *
 usrsctp_socket(int domain, int type, int protocol,
@@ -917,6 +917,17 @@ ssize_t
 usrsctp_sendv(struct socket *so,
               const void *data,
               size_t len,
+              struct sockaddr *to,
+              int addrcnt,
+              void *info,
+              socklen_t infolen,
+              unsigned int infotype,
+              int flags);
+
+ssize_t
+usrsctp_sendvec(struct socket *so,
+              const struct iovec *iov,
+              int iovcnt,
               struct sockaddr *to,
               int addrcnt,
               void *info,
@@ -974,9 +985,6 @@ usrsctp_connectx(struct socket *so,
 void
 usrsctp_close(struct socket *so);
 
-sctp_assoc_t
-usrsctp_getassocid(struct socket *, struct sockaddr *);
-
 int
 usrsctp_finish(void);
 
@@ -992,6 +1000,13 @@ usrsctp_set_non_blocking(struct socket *, int);
 int
 usrsctp_get_non_blocking(struct socket *);
 
+int
+usrsctp_get_events(struct socket *so);
+
+int
+usrsctp_set_upcall(struct socket *so,
+		   void (*upcall)(struct socket *, void *, int), void *arg);
+
 void
 usrsctp_register_address(void *);
 
@@ -1001,6 +1016,9 @@ usrsctp_deregister_address(void *);
 int
 usrsctp_set_ulpinfo(struct socket *, void *);
 
+void
+usrsctp_fire_timer(int delta);
+
 #define SCTP_DUMP_OUTBOUND 1
 #define SCTP_DUMP_INBOUND  0
 
@@ -1009,15 +1027,6 @@ usrsctp_dumppacket(const void *, size_t, int);
 
 void
 usrsctp_freedumpbuffer(char *);
-
-void
-usrsctp_enable_crc32c_offload(void);
-
-void
-usrsctp_disable_crc32c_offload(void);
-
-uint32_t
-usrsctp_crc32c(void *, size_t);
 
 #define USRSCTP_SYSCTL_DECL(__field)                \
 void usrsctp_sysctl_set_ ## __field(uint32_t value);\
@@ -1034,6 +1043,7 @@ USRSCTP_SYSCTL_DECL(sctp_asconf_enable)
 USRSCTP_SYSCTL_DECL(sctp_reconfig_enable)
 USRSCTP_SYSCTL_DECL(sctp_nrsack_enable)
 USRSCTP_SYSCTL_DECL(sctp_pktdrop_enable)
+USRSCTP_SYSCTL_DECL(sctp_strict_sacks)
 #if !defined(SCTP_WITH_NO_CSUM)
 USRSCTP_SYSCTL_DECL(sctp_no_csum_on_loopback)
 #endif
@@ -1072,6 +1082,7 @@ USRSCTP_SYSCTL_DECL(sctp_mbuf_threshold_count)
 USRSCTP_SYSCTL_DECL(sctp_do_drain)
 USRSCTP_SYSCTL_DECL(sctp_hb_maxburst)
 USRSCTP_SYSCTL_DECL(sctp_abort_if_one_2_one_hits_limit)
+USRSCTP_SYSCTL_DECL(sctp_strict_data_order)
 USRSCTP_SYSCTL_DECL(sctp_min_residual)
 USRSCTP_SYSCTL_DECL(sctp_max_retran_chunk)
 USRSCTP_SYSCTL_DECL(sctp_logging_level)

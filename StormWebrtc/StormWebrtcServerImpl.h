@@ -39,11 +39,16 @@
 
 #include "StormWebrtc/StormWebrtcServer.h"
 
+//#define STORMWEBRTC_USE_THREADS
+
+
 class StormWebrtcServerImpl;
 
 struct StormWebrtcConnection
 {
+#ifdef STORMWEBRTC_USE_THREADS
   std::recursive_mutex m_Mutex;
+#endif
 
   bool m_Allocated = false;
   bool m_Connected = false;
@@ -59,8 +64,8 @@ struct StormWebrtcConnection
   struct socket * m_SctpSocket;
   sctp_assoc_t m_SctpAssoc;
 
-  std::vector<int> m_IncSequence;
-  std::vector<int> m_OutSequence;
+  std::vector<bool> m_IncStreamCreated;
+  std::vector<bool> m_OutStreamCreated;
 };
 
 struct DataChannelOpenHeader
@@ -114,7 +119,7 @@ protected:
   void CheckConnectedState(StormWebrtcConnection & connection);
 
   void PrepareToRecv();
-  void SendData(StormWebrtcConnection & connection, DataMessageType type, int sid, bool reliable, const void * data, std::size_t length, int sequence = -1);
+  void SendData(StormWebrtcConnection & connection, DataMessageType type, int sid, bool reliable, const void * data, std::size_t length);
 
 private:
 
@@ -132,6 +137,10 @@ private:
   std::unique_ptr<StormWebrtcConnection[]> m_Connections;
   std::unordered_map<uint64_t, std::size_t> m_ConnectionMap;
   uint32_t m_NumConnections;
+
+#ifndef STORMWEBRTC_USE_THREADS
+  std::chrono::system_clock::time_point m_LastUpdate;
+#endif
 
   mbedtls_ssl_config m_Config;
   mbedtls_x509_crt m_Cert;

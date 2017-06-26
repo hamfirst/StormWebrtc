@@ -3,11 +3,11 @@
 #include <memory>
 #include <queue>
 #include <vector>
+#include <cstdlib>
 
 enum StormWebrtcClientStreamType : uint8_t
 {
   kReliable,
-  kUnreliableSequenced,
   kUnreliable,
 };
 
@@ -24,8 +24,6 @@ struct StormWebrtcPacket
   int m_Length;
   int m_Stream;
 };
-
-
 
 class StormWebrtcClient
 {

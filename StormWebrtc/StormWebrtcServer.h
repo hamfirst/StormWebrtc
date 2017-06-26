@@ -24,7 +24,6 @@ enum class StormWebrtcEventType
 enum StormWebrtcStreamType
 {
   kReliable,
-  kUnreliableSequenced,
   kUnreliable,
 };
 
