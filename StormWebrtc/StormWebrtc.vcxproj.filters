@@ -1,13 +1,11 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="StormWebrtcStun.cpp" />
-    <ClCompile Include="StormWebrtcServer.cpp" />
-    <ClCompile Include="StormWebrtcServerImpl.cpp" />
+    <ClCompile Include="StormWebrtc.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="StormWebrtcStun.h" />
-    <ClInclude Include="StormWebrtcServer.h" />
-    <ClInclude Include="StormWebrtcServerImpl.h" />
+    <ClInclude Include="StormWebrtc.h" />
+    <ClInclude Include="StormWebrtcConnection.h" />
+    <ClInclude Include="StormWebrtcDataChannel.h" />
   </ItemGroup>
 </Project>

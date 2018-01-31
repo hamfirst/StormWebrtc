@@ -2,8 +2,13 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClInclude Include="StormWebrtcClient.h" />
+    <ClInclude Include="StormWebrtcClientNative.h" />
+    <ClInclude Include="StormWebrtcClientWeb.h" />
+    <ClInclude Include="StormWebrtcClientTypes.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="StormWebrtcClientNative.cpp" />
+    <ClCompile Include="StormWebrtcClientWeb.cpp" />
     <ClCompile Include="StormWebrtcClient.cpp" />
   </ItemGroup>
 </Project>

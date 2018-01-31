@@ -13,9 +13,19 @@ elseif (MSVC)
   include_directories(../.././External/Windows)
   set(PLATFORM_SRC_mbedtls 
             )
+elseif (IOS)
+  add_definitions(-D_IOS)
+  include_directories(../.././External/IOS)
+  set(PLATFORM_SRC_mbedtls 
+            )
 elseif (APPLE)
   add_definitions(-D_MACOS)
   include_directories(/usr/include/freetype2)
+  set(PLATFORM_SRC_mbedtls 
+            )
+elseif (ANDROID)
+  add_definitions(-D_ANDROID)
+  include_directories(../.././External/Android)
   set(PLATFORM_SRC_mbedtls 
             )
 elseif (UNIX)

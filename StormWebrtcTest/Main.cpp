@@ -1,5 +1,6 @@
 
-#include "StormWebrtc/StormWebrtcServer.h"
+#include "StormWebrtc/StormWebrtc.h"
+#include "StormWebrtcServerAPI/StormWebrtcServer.h"
 
 int main()
 {
@@ -32,7 +33,7 @@ int main()
         break;
       case StormWebrtcEventType::kData:
         printf("Data\n");
-        server->SendPacket(ev.m_ConnectionHandle, "craps", 5, 0);
+        server->SendPacket(ev.m_ConnectionHandle, "craps", 5, 0, true);
         break;
       }
     }

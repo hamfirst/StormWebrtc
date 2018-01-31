@@ -276,7 +276,7 @@ extern userland_cond_t accept_cond;
 #define	SOCKBUF_MTX(_sb) (&(_sb)->sb_mtx)
 #if defined (__Userspace_os_Windows)
 #define SOCKBUF_LOCK_INIT(_sb, _name) \
-	InitializeCriticalSection(SOCKBUF_MTX(_sb))
+	if(InitializeCriticalSectionAndSpinCount(SOCKBUF_MTX(_sb), 0) == 0) abort();
 #define SOCKBUF_LOCK_DESTROY(_sb) DeleteCriticalSection(SOCKBUF_MTX(_sb))
 #define SOCKBUF_COND_INIT(_sb) InitializeConditionVariable((&(_sb)->sb_cond))
 #define SOCKBUF_COND_DESTROY(_sb) DeleteConditionVariable((&(_sb)->sb_cond))

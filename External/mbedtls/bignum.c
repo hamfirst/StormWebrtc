@@ -58,6 +58,8 @@
 #define mbedtls_free       free
 #endif
 
+#define MULADDC_CANNOT_USE_R7
+
 /* Implementation that should never be optimized out by the compiler */
 static void mbedtls_zeroize( void *v, size_t n ) {
     volatile unsigned char *p = v; while( n-- ) *p++ = 0;

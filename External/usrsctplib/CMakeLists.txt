@@ -73,8 +73,16 @@ check_function_exists("inet_addr" HAVE_INET_ADDR)
 
 
 add_definitions(-D__Userspace__)
-add_definitions(-D__Userspace_os_${CMAKE_SYSTEM_NAME})
+if(ANDROID)
+  add_definitions(-D__Userspace_os_Linux)
+else()
+  add_definitions(-D__Userspace_os_${CMAKE_SYSTEM_NAME})
+endif()
 add_definitions(-D_GNU_SOURCE)
+
+if(IOS)
+  add_definitions(-DIOS)
+endif()
 
 #################################################
 # CHECK STRUCT MEMBERS
@@ -105,6 +113,7 @@ endif()
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	add_definitions(-D_GNU_SOURCE)
+	
 endif()
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
@@ -130,7 +139,6 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
 	add_definitions(-DHAVE_SCONN_LEN)
 	add_definitions(-U__OpenBSD__)
 endif()
-
 
 #################################################
 # CHECK OPTIONS
@@ -196,7 +204,7 @@ if (SCTP_KAME)
 	add_definitions(-DSCTP_KAME)
 endif()
 
-option(WERROR "Warning as error" ON)
+option(WERROR "Warning as error" OFF)
 
 include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/netinet ${PROJECT_SOURCE_DIR}/netinet6)
 
@@ -211,6 +219,10 @@ netinet/sctp_auth.h      netinet/sctp_crc32.h      netinet/sctp_input.h         
 netinet/sctp_bsd_addr.h  netinet/sctp.h            netinet/sctp_lock_userspace.h  netinet/sctp_pcb.h           netinet/sctp_structs.h       netinet/sctputil.h
 netinet/sctp_callout.h   netinet/sctp_header.h     netinet/sctp_os.h              netinet/sctp_peeloff.h       netinet/sctp_sysctl.h        netinet/sctp_var.h
 )
+
+if(ANDROID)
+  LIST (APPEND usrsctp_netinet_HEADERS netinet/ifaddrs.h)
+endif()
 
 LIST (APPEND usrsctp_netinet6_HEADERS
 netinet6/sctp6_var.h
@@ -229,6 +241,10 @@ netinet/sctp_auth.c      netinet/sctp_crc32.c         netinet/sctp_pcb.c      ne
 netinet/sctp_bsd_addr.c  netinet/sctp_indata.c        netinet/sctp_peeloff.c  netinet/sctp_timer.c         user_environment.c
 )
 
+if(ANDROID)
+  LIST (APPEND usrsctp_SOURCES netinet/ifaddrs.c)
+endif()
+
 add_library(usrsctp SHARED ${usrsctp_SOURCES} ${usrsctp_HEADERS})
 add_library(usrsctp-static STATIC ${usrsctp_SOURCES} ${usrsctp_HEADERS})
 
@@ -243,8 +259,8 @@ SET_TARGET_PROPERTIES (usrsctp PROPERTIES IMPORT_SUFFIX "_import.lib")
 SET_TARGET_PROPERTIES (usrsctp PROPERTIES SOVERSION 1 VERSION 1.0.0)
 
 IF ("x${CMAKE_C_COMPILER_ID}" STREQUAL "xClang" OR "x${CMAKE_C_COMPILER_ID}" STREQUAL "xGNU")
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -pedantic -Wall -std=c99")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -pedantic -Wall -std=c99")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -pedantic -Wall -std=c99 -Wno-address-of-packed-member")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -pedantic -Wall -std=c99 -Wno-address-of-packed-member")
 	if (WERROR)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")

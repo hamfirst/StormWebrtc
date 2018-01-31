@@ -20,17 +20,22 @@ function StormWebrtcOpen(index) {
     Module.ccall('HandleStormWebrtcConnect', 'null', ['number'], [index]);
 }
 
-function StormWebrtcData(index, stream_index, msg) {
+function StormWebrtcData(index, stream_index, sender, msg) {
     var l = msg.byteLength;
     var ptr = Module._malloc(l);
     var buffer = new Uint8Array(msg);
     Module.writeArrayToMemory(buffer, ptr);
-    Module.ccall('HandleStormWebrtcMessage', 'null', ['number', 'number', 'number', 'number'], [index, stream_index, ptr, l]);
+    Module.ccall('HandleStormWebrtcMessage', 'null', ['number', 'number', 'number', 'number', 'number'], [index, stream_index, sender?1:0, ptr, l]);
 }
 
-function StormWebrtcSendBinaryMessage(index, stream, ptr, length) {
+function StormWebrtcSendBinaryMessage(index, stream, sender, ptr, length) {
     var packet = HEAPU8.slice(ptr, ptr + length);
-    _webrtc_array[index].out_channels[stream].send(packet);
+
+    if(sender != 0) {
+        _webrtc_array[index].inc_channels[stream].send(packet);
+    } else {
+        _webrtc_array[index].out_channels[stream].send(packet);
+    }
 }
 
 function StormWebrtcCheckConnected(index) {
@@ -113,6 +118,10 @@ function StormWebrtcCreateConnection(index, ipaddr_ptr, fingerprint_ptr, port, i
             StormWebrtcCheckConnected(webrtc_index);
         }
 
+        _webrtc_array[webrtc_index].inc_channels[stream_index].onmessage = function(event) {
+            StormWebrtcData(webrtc_index, stream_index, true, event.data);
+        }        
+
         out_channel.onclose = function(event) {
             StormWebrtcCheckDisconnect(webrtc_index);
         }
@@ -132,7 +141,7 @@ function StormWebrtcCreateConnection(index, ipaddr_ptr, fingerprint_ptr, port, i
             _webrtc_array[webrtc_index].inc_created[stream_index] = true;
 
             _webrtc_array[webrtc_index].inc_channels[stream_index].onmessage = function(event) {
-                StormWebrtcData(webrtc_index, stream_index, event.data);
+                StormWebrtcData(webrtc_index, stream_index, false, event.data);
             }
 
             _webrtc_array[webrtc_index].inc_channels[stream_index].onclose = function(event) {
