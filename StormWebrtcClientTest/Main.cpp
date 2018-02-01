@@ -1,4 +1,5 @@
 
+#include "StormWebrtc/StormWebrtc.h"
 #include "StormWebrtcClientAPI/StormWebrtcClient.h"
 
 #include <string>
@@ -12,7 +13,10 @@
 template <typename T>
 void emscripten_set_main_loop(T && t, int fps, bool bs)
 {
-
+  while(true)
+  {
+    t();
+  }
 }
 
 #endif
@@ -26,6 +30,8 @@ bool m_Connected = false;
 
 int main()
 {
+  StormWebrtcStaticInit();
+
   StormWebrtcClientChannelList in_channels = { StormWebrtcClientStreamType::kReliable };
   StormWebrtcClientChannelList out_channels = { StormWebrtcClientStreamType::kReliable };
   m_Client = CreateStormWebrtcClient(in_channels, out_channels);
@@ -35,6 +41,7 @@ int main()
 
   emscripten_set_main_loop([]()
   {
+    m_Client->Update();
     if (m_Client->IsConnected() && m_Connected == false)
     {
       m_Connected = true;
@@ -62,5 +69,6 @@ int main()
 
   }, 0, false);
 
+  StormWebrtcStaticCleanup();
   return 0;
 }
